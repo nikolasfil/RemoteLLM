@@ -1,0 +1,45 @@
+model_list:
+  # ollama-default: routes to the configured remote Ollama endpoint.
+  # Change OLLAMA_MODEL in .env to switch models; rebuild is not required.
+  - model_name: ollama-default
+    litellm_params:
+      model: os.environ/OLLAMA_LITELLM_MODEL
+      api_base: os.environ/OLLAMA_BASE_URL
+
+  # hermes: dedicated alias for the Hermes Agent.
+  # Change HERMES_OLLAMA_MODEL in .env to switch models; run `make restart-litellm` to apply.
+  # num_ctx is forced to 65536 — Hermes refuses models with <64k context at startup.
+  - model_name: hermes
+    litellm_params:
+      model: os.environ/HERMES_LITELLM_MODEL
+      api_base: os.environ/OLLAMA_BASE_URL
+      num_ctx: 65536
+
+  # claude-default: Anthropic API. Requires ANTHROPIC_API_KEY in .env.
+  # Agents use a scoped virtual key; the real API key lives only in this container.
+  - model_name: claude-default
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # bitnet-2b: CPU-only local inference via BitNet.cpp llama-server.
+  # Only reachable when the cpu-llm Compose profile is active.
+  # No GPU, no VPN required — useful as an offline fallback model.
+  - model_name: bitnet-2b
+    litellm_params:
+      model: openai/bitnet-2b
+      api_base: http://bitnet:8080
+      api_key: "none"
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+
+# Rate limiting (uncomment for multi-user deployments):
+# router_settings:
+#   rpm_limit: 60
+#   tpm_limit: 100000

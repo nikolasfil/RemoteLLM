@@ -1,0 +1,30 @@
+{
+  "workbench.colorTheme": "dark-jetbrains-color-theme",
+  "terminal.integrated.profiles.linux": {
+    "bash": {
+      "path": "bash",
+      "icon": "terminal-bash"
+    },
+    "zsh": {
+      "path": "zsh"
+    },
+    "fish": {
+      "path": "fish"
+    },
+    "tmux": {
+      "path": "tmux",
+      "icon": "terminal-tmux"
+    },
+    "pwsh": {
+      "path": "pwsh",
+      "icon": "terminal-powershell"
+    },
+    "Ranger": {
+      "path": "zsh",
+      "args": ["-lc", "VISUAL='code -r' EDITOR='code -r' ranger ."],
+      "overrideName": true,
+      "icon": "folder"
+    }
+  },
+  "extensions.autoUpdate": false
+}

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target="${1:-.}"
+
+if [[ ! -e "$target" ]]; then
+  echo "target does not exist: $target" >&2
+  exit 2
+fi
+
+if [[ -f "$target" ]]; then
+  target_dir="$(cd "$(dirname "$target")" && pwd)"
+else
+  target_dir="$(cd "$target" && pwd)"
+fi
+
+if command -v osv-scanner >/dev/null 2>&1; then
+  osv-scanner scan source -r "$target_dir" || true
+else
+  echo "warning: osv-scanner is unavailable" >&2
+fi
+
+if [[ -f "$target_dir/package-lock.json" || -f "$target_dir/npm-shrinkwrap.json" ]]; then
+  cd "$target_dir"
+  npm audit --audit-level="${NPM_AUDIT_LEVEL:-high}" || true
+fi
+
+if command -v pip-audit >/dev/null 2>&1; then
+  if [[ -f "$target_dir/requirements.txt" ]]; then
+    pip-audit -r "$target_dir/requirements.txt" || true
+  elif [[ -f "$target_dir/pyproject.toml" ]]; then
+    pip-audit "$target_dir" || true
+  fi
+fi
+
+if command -v socket >/dev/null 2>&1 && [[ "${SOCKET_EXTRA_ARGS:-}" != "" ]]; then
+  cd "$target_dir"
+  socket ${SOCKET_EXTRA_ARGS}
+fi

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v hermes >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+Hermes Agent is not installed in this image.
+
+Enable it by setting these build args in .env, then run `make build`:
+
+  INSTALL_HERMES_AGENT=1
+  HERMES_AGENT_VERSION=<pinned-version>   # e.g. 0.14.0
+
+The version spec is intentionally required so builds do not silently pull latest.
+EOF
+  exit 127
+fi
+
+exec hermes "$@"

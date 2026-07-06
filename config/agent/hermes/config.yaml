@@ -1,0 +1,24 @@
+# Hermes Agent config for RemoteLLM.
+#
+# provider: 'custom' points at the LiteLLM gateway (http://litellm:4000/v1).
+# model_name: default model — the LiteLLM 'hermes' alias (backed by HERMES_OLLAMA_MODEL).
+# api_key: set this explicitly when routing Hermes through LiteLLM.
+#   If you change this seed, delete ~/.hermes/config.yaml and run `make refresh-agent`
+#   to re-seed, or update the persisted Hermes config directly.
+#
+# Choosing a different model at run time:
+#   hermes chat -m custom:<litellm-model-name>
+#   hermes -z "prompt" -m custom:ollama-default
+#   /model custom:<model>   (in-session slash command)
+#
+# NOTE: Verify this schema against your pinned HERMES_AGENT_VERSION by running
+# `hermes model` once interactively and checking ~/.hermes/config.yaml. Update
+# config/agent/hermes/config.yaml if the schema differs, then `make refresh-agent`.
+# RemoteLLM custom config commented out — hermes will use its own defaults on first run.
+# To re-enable LiteLLM routing, uncomment and set the correct api_key:
+#
+# model: custom
+# custom:
+#   base_url: http://litellm:4000/v1
+#   api_key: change-me
+#   model_name: hermes

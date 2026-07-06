@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RemoteLLM</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1115;
+      --panel: #181b22;
+      --text: #eef1f6;
+      --muted: #aab3c2;
+      --accent: #59c1a5;
+      --border: #2a2f3a;
+      --tag-bg: #1e2330;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 64px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+    }
+    .subtitle {
+      margin: 0 0 36px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    h2 {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 10px;
+    }
+    section { margin-bottom: 28px; }
+    nav {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    a.card {
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: inherit;
+      text-decoration: none;
+      background: var(--panel);
+      min-height: 110px;
+    }
+    a.card:hover { border-color: var(--accent); }
+    a.card.disabled {
+      opacity: .45;
+      cursor: default;
+      pointer-events: none;
+    }
+    strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+      font-size: 17px;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+      flex: 1;
+    }
+    .tag {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: ui-monospace, "SFMono-Regular", monospace;
+      color: var(--muted);
+      background: var(--tag-bg);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+    }
+    code { color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>RemoteLLM</h1>
+    <p class="subtitle">Local entrypoint for the remote coding-agent stack.</p>
+
+    <section>
+      <h2>Always available</h2>
+      <nav>
+        <a class="card" href="api/litellm/">
+          <strong>LiteLLM API</strong>
+          <p>OpenAI-compatible gateway. Agents call <code>http://litellm:4000/v1</code> using scoped virtual keys.</p>
+        </a>
+        <a class="card" href="api/litellm/ui">
+          <strong>LiteLLM Admin</strong>
+          <p>Manage virtual keys, view per-model usage and spend, configure providers and teams.</p>
+          <span class="tag">/api/litellm/ui</span>
+        </a>
+        <a class="card" href="docs/">
+          <strong>Documentation</strong>
+          <p>Architecture, setup, operations, and one guide per service in the stack.</p>
+          <span class="tag">/docs/</span>
+        </a>
+      </nav>
+    </section>
+
+    <section>
+      <h2>Profile: ide &amp; web-terminal &nbsp;·&nbsp; <code>make up-ide</code></h2>
+      <nav>
+        <a class="card" href="code/">
+          <strong>Browser IDE</strong>
+          <p>Shared project workspace in code-server (VS Code in the browser).</p>
+          <span class="tag">--profile ide</span>
+        </a>
+        <a class="card" href="terminal/">
+          <strong>Terminal</strong>
+          <p>Zsh shell with Oh My Zsh, tmux, and all project tools pre-installed.</p>
+          <span class="tag">--profile web-terminal</span>
+        </a>
+      </nav>
+    </section>
+
+    <section>
+      <h2>Profile: opencode-web &nbsp;·&nbsp; <code>make up-opencode-web</code></h2>
+      <nav>
+        <a class="card" id="opencode-card" href="#">
+          <strong>OpenCode</strong>
+          <p>Browser-based AI coding interface backed by the LiteLLM gateway.</p>
+          <span class="tag" id="opencode-tag">--profile opencode-web · :4040</span>
+        </a>
+      </nav>
+    </section>
+
+    <section>
+      <h2>Profile: hermes-web &nbsp;·&nbsp; <code>make up-hermes-web</code></h2>
+      <nav>
+        <a class="card" id="hermes-card" href="#">
+          <strong>Hermes Dashboard</strong>
+          <p>Hermes Agent web UI — manage sessions, skills, and model configuration.</p>
+          <span class="tag" id="hermes-tag">--profile hermes-web · :8645</span>
+        </a>
+      </nav>
+    </section>
+
+    <section>
+      <h2>Profile: observability &nbsp;·&nbsp; <code>make up-observability</code></h2>
+      <nav>
+        <a class="card" id="langfuse-card" href="#">
+          <strong>Langfuse</strong>
+          <p>Observability dashboard — trace LiteLLM requests, inspect latency, token usage, and failures.</p>
+          <span class="tag" id="langfuse-tag">--profile observability · :3000</span>
+        </a>
+      </nav>
+    </section>
+  </main>
+  <script>
+    (function () {
+      var h = location.hostname;
+      var proto = location.protocol;
+
+      var oc = document.getElementById('opencode-card');
+      oc.href = proto + '//' + h + ':4040/';
+
+      var hm = document.getElementById('hermes-card');
+      hm.href = proto + '//' + h + ':8645/';
+
+      var lf = document.getElementById('langfuse-card');
+      lf.href = proto + '//' + h + ':3000/';
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# dispatch-cli <codex|claude-code|opencode> <task_id> <workspace_dir> <prompt>
+#
+# Thin, testable wrapper that Hermes's terminal tool calls to delegate a kanban task to
+# the standalone Codex CLI, Claude Code binary, or OpenCode CLI. See the kanban-dispatch skill
+# (config/agent/hermes-skills/devops/kanban-dispatch/SKILL.md) for the calling convention
+# and how to interpret the result.
+#
+# Resolves the workspace (git-init if it isn't a repo yet — Codex requires one), runs the
+# backend non-interactively, tees combined output to
+# /workspace/.aide/dispatch/<task_id>.<backend>.{log,json,err}, and always finishes by
+# echoing EXIT:<code> so callers have one uniform success check regardless of backend.
+#
+# Tunable via env vars (defaults match the dispatch plan's starting constants):
+#   DISPATCH_CODEX_SANDBOX        default "workspace-write". Set to
+#                                  "danger-full-access" to bypass Codex's own
+#                                  sandbox when the container is already externally
+#                                  isolated and bubblewrap/user namespaces fail.
+#   DISPATCH_CLAUDE_MAX_TURNS     default 12.
+#   DISPATCH_CLAUDE_ALLOWED_TOOLS default "Read,Edit,Write,Bash".
+#   DISPATCH_OPENCODE_MODEL       optional OpenCode model, e.g. litellm/ollama-default.
+#   DISPATCH_OPENCODE_AGENT       optional OpenCode agent name.
+#   DISPATCH_OPENCODE_SKIP_PERMISSIONS
+#                                  default 1 for unattended dispatch. Set 0 to require
+#                                  OpenCode's normal permission flow.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: dispatch-cli <codex|claude-code|opencode> <task_id> <workspace_dir> <prompt>
+
+  backend        "codex", "claude-code", or "opencode"
+  task_id        kanban task id (used to name the log files)
+  workspace_dir  directory to run the backend in (created if missing)
+  prompt         the task prompt / acceptance criteria to hand to the backend
+EOF
+}
+
+if [[ $# -lt 4 ]]; then
+  usage
+  exit 2
+fi
+
+backend=$1
+task_id=$2
+workspace_dir=$3
+prompt=$4
+
+case "$backend" in
+  codex|claude-code|opencode) ;;
+  *)
+    echo "dispatch-cli: unknown backend '$backend' (expected 'codex', 'claude-code', or 'opencode')" >&2
+    usage
+    exit 2
+    ;;
+esac
+
+if [[ -z "$task_id" ]]; then
+  echo "dispatch-cli: task_id must not be empty" >&2
+  exit 2
+fi
+
+log_dir=/workspace/.aide/dispatch
+mkdir -p "$log_dir"
+log_base="$log_dir/${task_id}.${backend}"
+
+mkdir -p "$workspace_dir"
+cd "$workspace_dir"
+
+if [[ ! -d .git ]]; then
+  git init -q
+fi
+
+case "$backend" in
+  codex)
+    if ! command -v codex >/dev/null 2>&1; then
+      echo "dispatch-cli: Codex CLI is not installed in this image (INSTALL_CODEX_CLI=1 required)" >&2
+      echo "EXIT:127"
+      exit 127
+    fi
+
+    log="${log_base}.log"
+    codex_sandbox="${DISPATCH_CODEX_SANDBOX:-workspace-write}"
+    case "$codex_sandbox" in
+      read-only|workspace-write)
+        codex_args=(exec --sandbox "$codex_sandbox" -c 'approval_policy="never"')
+        ;;
+      danger-full-access)
+        codex_args=(exec --dangerously-bypass-approvals-and-sandbox)
+        ;;
+      *)
+        echo "dispatch-cli: unsupported DISPATCH_CODEX_SANDBOX='$codex_sandbox'" >&2
+        echo "dispatch-cli: expected read-only, workspace-write, or danger-full-access" >&2
+        echo "EXIT:2" | tee -a "$log" >/dev/null
+        echo "EXIT:2"
+        exit 2
+        ;;
+    esac
+    codex_args+=("$prompt")
+
+    set +e
+    codex "${codex_args[@]}" 2>&1 | tee "$log"
+    code=${PIPESTATUS[0]}
+    set -e
+    echo "EXIT:${code}" | tee -a "$log" >/dev/null
+    echo "EXIT:${code}"
+    exit "$code"
+    ;;
+
+  claude-code)
+    if ! command -v claude >/dev/null 2>&1; then
+      echo "dispatch-cli: Claude Code is not installed in this image (INSTALL_CLAUDE_CODE=1 required)" >&2
+      echo "EXIT:127"
+      exit 127
+    fi
+
+    log="${log_base}.json"
+    err="${log_base}.err"
+    max_turns="${DISPATCH_CLAUDE_MAX_TURNS:-12}"
+    allowed_tools="${DISPATCH_CLAUDE_ALLOWED_TOOLS:-Read,Edit,Write,Bash}"
+
+    set +e
+    claude -p "$prompt" --output-format json --max-turns "$max_turns" \
+      --allowedTools "$allowed_tools" >"$log" 2>"$err"
+    code=$?
+    set -e
+    echo "EXIT:${code}"
+    exit "$code"
+    ;;
+
+  opencode)
+    if ! command -v opencode >/dev/null 2>&1; then
+      echo "dispatch-cli: OpenCode CLI is not installed in this image" >&2
+      echo "EXIT:127"
+      exit 127
+    fi
+
+    log="${log_base}.json"
+    err="${log_base}.err"
+    opencode_args=(run --format json --dir "$workspace_dir")
+
+    if [[ -n "${DISPATCH_OPENCODE_MODEL:-}" ]]; then
+      opencode_args+=(--model "$DISPATCH_OPENCODE_MODEL")
+    fi
+    if [[ -n "${DISPATCH_OPENCODE_AGENT:-}" ]]; then
+      opencode_args+=(--agent "$DISPATCH_OPENCODE_AGENT")
+    fi
+    if [[ "${DISPATCH_OPENCODE_SKIP_PERMISSIONS:-1}" != "0" ]]; then
+      opencode_args+=(--dangerously-skip-permissions)
+    fi
+    opencode_args+=("$prompt")
+
+    set +e
+    opencode "${opencode_args[@]}" >"$log" 2>"$err"
+    code=$?
+    set -e
+    echo "EXIT:${code}"
+    exit "$code"
+    ;;
+esac

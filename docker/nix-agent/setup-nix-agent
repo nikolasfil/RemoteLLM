@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
+
+mkdir -p /nix /home/agent/.cache/devbox
+chown "${PUID}:${PGID}" /nix /home/agent/.cache/devbox 2>/dev/null || true
+
+if ! sudo -E -H -u agent -- test -w /nix; then
+  echo "nix-agent: /nix is not writable by uid ${PUID}. Run 'make init' or fix .local/volumes/nix ownership." >&2
+  exit 1
+fi
+
+if ! sudo -E -H -u agent -- test -w /home/agent/.cache/devbox; then
+  echo "nix-agent: Devbox cache is not writable by uid ${PUID}. Run 'make init' or fix .local/volumes/devbox-cache ownership." >&2
+  exit 1
+fi
+
+if [[ ! -x /nix/var/nix/profiles/per-user/agent/profile/bin/nix && -f /opt/remotellm-nix-seed.tar.xz ]]; then
+  tar -C / -xJf /opt/remotellm-nix-seed.tar.xz
+  chown -R "${PUID}:${PGID}" /nix 2>/dev/null || true
+fi
+
+exec sudo -E -H -u agent -- setup-agent "$@"

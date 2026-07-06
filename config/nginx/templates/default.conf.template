@@ -1,0 +1,90 @@
+server {
+    listen 8080;
+    server_name _;
+
+    client_max_body_size 100m;
+    resolver 127.0.0.11 ipv6=off valid=10s;
+
+    location = ${BASE_PATH}/ {
+        root /usr/share/nginx/html;
+        try_files /index.html =404;
+    }
+
+    location = ${BASE_PATH}/favicon.ico {
+        return 204;
+    }
+
+    location = ${BASE_PATH}/code {
+        return 301 ${BASE_PATH}/code/;
+    }
+
+    location = ${BASE_PATH}/terminal {
+        return 301 ${BASE_PATH}/terminal/;
+    }
+
+    location ${BASE_PATH}/code/ {
+        set $code_upstream code-server:8080;
+        rewrite ^${BASE_PATH}/code/(.*) /$1 break;
+        proxy_pass http://$code_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+
+    location ${BASE_PATH}/terminal/ {
+        set $terminal_upstream web-terminal:7681;
+        proxy_pass http://$terminal_upstream$request_uri;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+
+    location = ${BASE_PATH}/docs {
+        return 301 ${BASE_PATH}/docs/;
+    }
+
+    # Statically rendered docs/*.md and docs/guides/*.md (built with `make docs`).
+    # alias (not root) strips the BASE_PATH prefix so this works under any sub-path.
+    location ${BASE_PATH}/docs/ {
+        alias /usr/share/nginx/html/docs/;
+        try_files $uri $uri/index.html =404;
+    }
+
+    # LiteLLM API and admin UI.
+    # UI at ${BASE_PATH}/api/litellm/ui — login: LITELLM_UI_USERNAME / LITELLM_UI_PASSWORD.
+    # LiteLLM's frontend generates /ui/... links without the root_path prefix;
+    # redirect them so the browser ends up at the correct path.
+    location ~ ^${BASE_PATH}/ui/ {
+        return 301 ${BASE_PATH}/api/litellm$request_uri;
+    }
+
+    location = ${BASE_PATH}/api/litellm {
+        return 301 ${BASE_PATH}/api/litellm/;
+    }
+
+    # Nginx issues this trailing-slash redirect itself so litellm's internal redirect never reaches the browser.
+    location = ${BASE_PATH}/api/litellm/ui {
+        return 301 ${BASE_PATH}/api/litellm/ui/;
+    }
+
+    # Starlette 0.50 get_route_path() strips root_path from scope["path"], so
+    # path and root_path must be consistent: nginx must forward the FULL URL
+    # (not the stripped suffix). With SERVER_ROOT_PATH=${BASE_PATH}/api/litellm the app
+    # uses get_route_path to strip the prefix itself.
+    location ~ ^${BASE_PATH}/api/litellm {
+        set $litellm_upstream litellm:4000;
+        proxy_pass http://$litellm_upstream$request_uri;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_redirect off;
+    }
+}

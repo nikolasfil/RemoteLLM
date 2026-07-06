@@ -1,0 +1,8 @@
+.codex
+.env
+.cache/
+.local/
+graphify-out/cache
+models/
+!models/**/.gitkeep
+config/nginx/html/docs/

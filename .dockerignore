@@ -1,0 +1,11 @@
+.git
+.venvs
+.cache
+.backups
+.env
+volumes
+workspace/projects
+workspace/inputs
+workspace/outputs
+docs
+README.md

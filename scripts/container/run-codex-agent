@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v codex >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+Codex CLI is not installed in this image.
+
+Enable it by setting these build args in .env, then run `make build`:
+
+  INSTALL_CODEX_CLI=1
+  CODEX_CLI_PACKAGE=@openai/codex@<pinned-version>
+
+The package spec is intentionally required so builds do not silently pull latest.
+EOF
+  exit 127
+fi
+
+exec codex "$@"

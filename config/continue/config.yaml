@@ -1,0 +1,29 @@
+name: RemoteLLM
+version: 0.0.1
+schema: v1
+
+models:
+  - name: RemoteLLM LiteLLM
+    provider: openai
+    model: ollama-default
+    apiBase: http://litellm:4000/v1
+    apiKey: ${{ secrets.OPENAI_API_KEY }}
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      temperature: 0.2
+
+  - name: RemoteLLM LiteLLM Autocomplete
+    provider: openai
+    model: ollama-default
+    apiBase: http://litellm:4000/v1
+    apiKey: ${{ secrets.OPENAI_API_KEY }}
+    roles:
+      - autocomplete
+    useLegacyCompletionsEndpoint: false
+    autocompleteOptions:
+      debounceDelay: 350
+      maxPromptTokens: 1024
+      onlyMyCode: true

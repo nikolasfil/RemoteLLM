@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+requirements_file=""
+args=("$@")
+
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    -r|--requirement)
+      if (( i + 1 < ${#args[@]} )); then
+        requirements_file="${args[$((i + 1))]}"
+      fi
+      ;;
+  esac
+done
+
+if [[ -n "$requirements_file" && -f "$requirements_file" ]] && command -v pip-audit >/dev/null 2>&1; then
+  pip-audit -r "$requirements_file"
+elif [[ "${SAFE_ALLOW_UNCHECKED:-0}" != "1" ]]; then
+  echo "warning: direct pip package specs cannot be fully pre-audited here." >&2
+  echo "set SAFE_ALLOW_UNCHECKED=1 to allow this install, or use a requirements file." >&2
+  exit 2
+fi
+
+exec python3 -m pip install "$@"

@@ -1,0 +1,701 @@
+# Resource limits: edit the 'deploy.resources.limits' blocks below and
+# uncomment to enforce them. Tune values to your host hardware.
+
+name: ${COMPOSE_PROJECT_NAME:-remotellm}
+
+x-agent-env: &agent-env
+  TZ: ${TZ:-Europe/Athens}
+  HOME: /home/agent
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+  LC_CTYPE: C.UTF-8
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama.example.internal:11434}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3-coder:30b}
+  LOCAL_ENDPOINT: ${LOCAL_ENDPOINT:-http://litellm:4000/v1}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://litellm:4000/v1}
+  OPENAI_API_KEY: ${AGENT_VIRTUAL_KEY:-${LITELLM_MASTER_KEY:-change-me}}
+  AGENT_PROFILE: ${AGENT_PROFILE:-agent}
+  AGENT_MODEL_ALIAS: ${AGENT_MODEL_ALIAS:-ollama-default}
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,agent,nginx,code-server,litellm,wireguard}
+  TMPDIR: /home/agent/.cache/opencode/tmp
+  GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-}
+  GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-}
+
+x-agent-volumes: &agent-volumes
+  - &agent-vol-projects ./.local/workspace/projects:/workspace/projects
+  - &agent-vol-inputs ./.local/workspace/inputs:/workspace/inputs:ro
+  - &agent-vol-outputs ./.local/workspace/outputs:/workspace/outputs
+  - &agent-vol-home ./.local/volumes/agent-home:/home/agent
+  - &agent-vol-opencode ./.local/volumes/opencode-home:/home/agent/.config/opencode
+  - &agent-vol-codex ./.local/volumes/codex-home:/home/agent/.codex
+  - &agent-vol-claude ./.local/volumes/claude-home:/home/agent/.claude
+  - &agent-vol-hermes ./.local/volumes/hermes-home:/home/agent/.hermes
+  - &agent-vol-aide ./.local/volumes/aide-memory:/workspace/.aide
+  - &agent-vol-mise ./.local/volumes/mise-cache:/home/agent/.local/share/mise
+
+x-agent-service: &agent-service
+  image: remotellm/agent:local
+  environment: *agent-env
+  user: "${PUID:-1000}:${PGID:-1000}"
+  working_dir: /workspace/projects
+  volumes: *agent-volumes
+  networks:
+    - remotellm
+  tmpfs:
+    - /tmp
+
+services:
+  wireguard:
+    profiles: ["vpn"]
+    image: ${WIREGUARD_IMAGE:-lscr.io/linuxserver/wireguard:1.0.20250521-r1-ls113}
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-wireguard
+    cap_add:
+      - NET_ADMIN
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Athens}
+    volumes:
+      - ./.local/volumes/wireguard:/config
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+    networks:
+      - remotellm
+    healthcheck:
+      test: ["CMD", "wg", "show"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "1"
+    #       memory: 256m    # wireguard
+
+  vpn-proxy:
+    profiles: ["vpn"]
+    build:
+      context: .
+      dockerfile: docker/vpn-proxy/Dockerfile
+      args:
+        MICROSOCKS_REF: ${MICROSOCKS_REF:-master}
+    image: remotellm/vpn-proxy:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-vpn-proxy
+    network_mode: service:wireguard
+    depends_on:
+      - wireguard
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    environment:
+      OLLAMA_FORWARD_TARGET: ${OLLAMA_FORWARD_TARGET:-10.5.5.5:11434}
+      OLLAMA_FORWARD_PORT: ${OLLAMA_FORWARD_PORT:-11434}
+    tmpfs:
+      - /tmp
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "0.5"
+    #       memory: 64m     # vpn-proxy
+
+  agent:
+    <<: *agent-service
+    build:
+      context: .
+      dockerfile: docker/agent/Dockerfile
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+        OPENCODE_VERSION: ${OPENCODE_VERSION:-1.15.12}
+        SOCKET_VERSION: ${SOCKET_VERSION:-1.1.102}
+        PIP_AUDIT_VERSION: ${PIP_AUDIT_VERSION:-2.10.0}
+        OSV_SCANNER_VERSION: ${OSV_SCANNER_VERSION:-v2.3.8}
+        SCORECARD_VERSION: ${SCORECARD_VERSION:-v5.2.1}
+        TTYD_VERSION: ${TTYD_VERSION:-1.7.7}
+        OH_MY_ZSH_REF: ${OH_MY_ZSH_REF:-master}
+        ZSH_AUTOSUGGESTIONS_REF: ${ZSH_AUTOSUGGESTIONS_REF:-v0.7.1}
+        ZSH_SYNTAX_HIGHLIGHTING_REF: ${ZSH_SYNTAX_HIGHLIGHTING_REF:-0.8.0}
+        MISE_VERSION: ${MISE_VERSION:-2025.5.14}
+        INSTALL_CODEX_CLI: ${INSTALL_CODEX_CLI:-0}
+        CODEX_CLI_PACKAGE: ${CODEX_CLI_PACKAGE:-}
+        INSTALL_CLAUDE_CODE: ${INSTALL_CLAUDE_CODE:-0}
+        CLAUDE_CODE_PACKAGE: ${CLAUDE_CODE_PACKAGE:-}
+        INSTALL_HERMES_AGENT: ${INSTALL_HERMES_AGENT:-0}
+        HERMES_AGENT_VERSION: ${HERMES_AGENT_VERSION:-}
+        HERMES_INSTALL_METHOD: ${HERMES_INSTALL_METHOD:-official}
+        DEV_PASSWORD: ${DEV_PASSWORD:-change-me}
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-agent
+    depends_on:
+      - litellm
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: agent
+    command: ["sleep", "infinity"]
+    # gVisor kernel-level isolation. Requires host setup; see docs/SETUP.md.
+    # runtime: runsc
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "4"
+    #       memory: 8g      # agent
+
+  nix-agent:
+    build:
+      context: .
+      dockerfile: docker/nix-agent/Dockerfile
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+        DEVBOX_VERSION: ${DEVBOX_VERSION:-0.17.2}
+        NIX_VERSION: ${NIX_VERSION:-2.29.1}
+    image: remotellm/nix-agent:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-nix-agent
+    profiles:
+      - nix
+    depends_on:
+      - litellm
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: nix-agent
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    working_dir: /workspace/projects
+    command: ["sleep", "infinity"]
+    volumes:
+      - *agent-vol-projects
+      - *agent-vol-inputs
+      - *agent-vol-outputs
+      - *agent-vol-home
+      - *agent-vol-opencode
+      - *agent-vol-codex
+      - *agent-vol-claude
+      - *agent-vol-hermes
+      - *agent-vol-aide
+      - *agent-vol-mise
+      - ./.local/volumes/devbox-cache:/home/agent/.cache/devbox
+      - ./.local/volumes/nix:/nix
+    networks:
+      - remotellm
+    tmpfs:
+      - /tmp
+    # gVisor kernel-level isolation. Requires host setup; see docs/SETUP.md.
+    # runtime: runsc
+
+  nginx:
+    image: nginx:1.30.2-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-nginx
+    ports:
+      - "${NGINX_BIND:-127.0.0.1}:${NGINX_PORT:-8088}:8080"
+    environment:
+      BASE_PATH: ${BASE_PATH:-}
+      NGINX_ENVSUBST_FILTER: BASE_PATH
+    volumes:
+      - ./config/nginx/templates:/etc/nginx/templates:ro
+      - ./config/nginx/html:/usr/share/nginx/html:ro
+      - ./.local/volumes/nginx-auth:/etc/nginx/auth:ro
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+      - /etc/nginx/conf.d
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "0.5"
+    #       memory: 128m    # nginx
+
+  code-server:
+    image: ghcr.io/coder/code-server:4.121.0
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-code
+    profiles:
+      - ide
+    environment:
+      PASSWORD: ${CODE_SERVER_PASSWORD:-change-me}
+      TZ: ${TZ:-Europe/Athens}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    command:
+      - --bind-addr
+      - 0.0.0.0:8080
+      - /workspace/projects
+    volumes:
+      - ./.local/workspace/projects:/workspace/projects
+      - ./.local/workspace/inputs:/workspace/inputs:ro
+      - ./.local/workspace/outputs:/workspace/outputs
+      - ./.local/volumes/vscode-config:/home/coder/.config
+      - ./.local/volumes/vscode-config/continue:/home/coder/.continue
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "4"
+    #       memory: 4g      # code-server
+
+  web-terminal:
+    <<: *agent-service
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-terminal
+    profiles:
+      - web-terminal
+    depends_on:
+      - agent
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: web-terminal
+      TTYD_USER: ${TTYD_USER:-agent}
+      TTYD_PASSWORD: ${TTYD_PASSWORD:-change-me}
+    command:
+      - ttyd
+      - -W
+      - -p
+      - "7681"
+      - -b
+      - ${BASE_PATH:-}/terminal
+      - -c
+      - "${TTYD_USER:-agent}:${TTYD_PASSWORD:-change-me}"
+      - zsh
+      - -l
+    restart: unless-stopped
+    # gVisor kernel-level isolation. Requires host setup; see docs/SETUP.md.
+    # runtime: runsc
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "2"
+    #       memory: 1g      # web-terminal
+
+  codex:
+    <<: *agent-service
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-codex
+    profiles:
+      - codex
+    depends_on:
+      - agent
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: codex
+    command: ["run-codex-agent"]
+    stdin_open: true
+    tty: true
+
+  opencode-web:
+    <<: *agent-service
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-opencode-web
+    profiles:
+      - opencode-web
+    depends_on:
+      - agent
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: opencode-web
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-change-me}
+    command:
+      - opencode
+      - --web
+      - --hostname
+      - "0.0.0.0"
+      - --port
+      - "4040"
+    ports:
+      - "${NGINX_BIND:-127.0.0.1}:${OPENCODE_WEB_PORT:-4040}:4040"
+
+  claude:
+    <<: *agent-service
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-claude
+    profiles:
+      - claude
+    depends_on:
+      - agent
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: claude
+      OPENAI_API_KEY: ${CLAUDE_VIRTUAL_KEY:-${LITELLM_MASTER_KEY:-change-me}}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    command: ["run-claude-agent"]
+    stdin_open: true
+    tty: true
+
+  hermes:
+    <<: *agent-service
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-hermes
+    profiles:
+      - hermes
+    depends_on:
+      - agent
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: hermes
+      LOCAL_ENDPOINT: ""
+      OPENAI_BASE_URL: ""
+      OPENAI_API_KEY: ""
+      # CUSTOM_BASE_URL: http://litellm:4000/v1
+      # CUSTOM_API_KEY: ${HERMES_VIRTUAL_KEY:-${LITELLM_MASTER_KEY:-change-me}}
+    command: ["run-hermes-agent"]
+    stdin_open: true
+    tty: true
+
+  hermes-web:
+    <<: *agent-service
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-hermes-web
+    profiles:
+      - hermes-web
+    depends_on:
+      - agent
+    environment:
+      <<: *agent-env
+      AGENT_PROFILE: hermes-web
+      LOCAL_ENDPOINT: ""
+      OPENAI_BASE_URL: ""
+      OPENAI_API_KEY: ""
+      # CUSTOM_BASE_URL: http://litellm:4000/v1
+      # CUSTOM_API_KEY: ${HERMES_VIRTUAL_KEY:-${LITELLM_MASTER_KEY:-change-me}}
+    command:
+      [
+        "hermes",
+        "dashboard",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8645",
+        "--insecure",
+      ]
+    ports:
+      - "${NGINX_BIND:-127.0.0.1}:${HERMES_WEB_PORT:-8645}:8645"
+    # gVisor kernel-level isolation. Requires host setup; see docs/SETUP.md.
+    # runtime: runsc
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "1"
+    #       memory: 1g      # hermes-web
+
+  playwright-mcp:
+    image: remotellm/playwright:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-playwright
+    profiles:
+      - playwright
+    build:
+      context: .
+      dockerfile: docker/playwright/Dockerfile
+    volumes:
+      - ./.local/workspace/projects:/workspace/projects
+      - ./.local/workspace/outputs/playwright-report:/workspace/outputs/playwright-report
+      - ./.local/workspace/outputs/test-results:/workspace/outputs/test-results
+    networks:
+      - remotellm
+    security_opt:
+      - no-new-privileges:true
+
+  bitnet:
+    build:
+      context: ./docker/bitnet
+    image: remotellm/bitnet:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-bitnet
+    profiles:
+      - cpu-llm
+    environment:
+      BITNET_MODEL: ${BITNET_MODEL:-/models/ggml-model-i2_s.gguf}
+      BITNET_CTX_SIZE: ${BITNET_CTX_SIZE:-4096}
+      BITNET_THREADS: ${BITNET_THREADS:-4}
+    volumes:
+      - ./models/bitnet:/models:ro
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4g
+
+  litellm-postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-litellm-postgres
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD:-change-me}
+      POSTGRES_DB: litellm
+    volumes:
+      - ./.local/volumes/litellm-postgres:/var/lib/postgresql/data
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "0.5"
+    #       memory: 384m    # litellm-postgres
+
+  litellm:
+    build:
+      context: .
+      dockerfile: docker/litellm/Dockerfile
+      args:
+        LITELLM_VERSION: ${LITELLM_VERSION:-1.86.2}
+    image: remotellm/litellm:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-litellm
+    depends_on:
+      litellm-postgres:
+        condition: service_healthy
+    environment:
+      OLLAMA_BASE_URL: ${LITELLM_OLLAMA_BASE_URL:-${OLLAMA_BASE_URL:-http://ollama.example.internal:11434}}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3-coder:30b}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-change-me}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-change-me-salt}
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD:-change-me}@litellm-postgres:5432/litellm
+      UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
+      UI_PASSWORD: ${LITELLM_UI_PASSWORD:-change-me}
+      LITELLM_PROXY_BASE_URL: ${LITELLM_PROXY_BASE_URL:-http://127.0.0.1:8088${BASE_PATH:-}/api/litellm}
+      SERVER_ROOT_PATH: ${BASE_PATH:-}/api/litellm
+      LITELLM_NON_ROOT: "true"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,agent,nginx,code-server,litellm,wireguard}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      OLLAMA_LITELLM_MODEL: ollama/${OLLAMA_MODEL:-qwen3-coder:30b}
+      HERMES_LITELLM_MODEL: ollama/${HERMES_OLLAMA_MODEL:-hermes3:8b}
+    volumes:
+      - ./config/litellm/config.yaml:/app/config.yaml:ro
+      - ./.local/volumes/litellm:/app/state
+      - ./.local/volumes/litellm-runtime:/var/lib/litellm
+    command:
+      - litellm
+      - --config
+      - /app/config.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4000"
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "2"
+    #       memory: 2g      # litellm
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-langfuse
+    profiles: [observability]
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_started
+      langfuse-redis:
+        condition: service_started
+    ports:
+      - "${LANGFUSE_BIND:-127.0.0.1}:${LANGFUSE_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-langfuse}
+      SALT: ${LANGFUSE_SALT:-change-me-langfuse-salt}
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-postgres:5432/langfuse
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-langfuse}
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_ACCESS_KEY: ${LANGFUSE_MINIO_USER:-langfuse}
+      LANGFUSE_S3_SECRET_KEY: ${LANGFUSE_MINIO_PASSWORD:-langfuse}
+      LANGFUSE_S3_BUCKET: langfuse
+      LANGFUSE_S3_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_USER:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-langfuse-worker
+    profiles: [observability]
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_started
+      langfuse-redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-postgres:5432/langfuse
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-langfuse}
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      SALT: ${LANGFUSE_SALT:-change-me-langfuse-salt}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_ACCESS_KEY: ${LANGFUSE_MINIO_USER:-langfuse}
+      LANGFUSE_S3_SECRET_KEY: ${LANGFUSE_MINIO_PASSWORD:-langfuse}
+      LANGFUSE_S3_BUCKET: langfuse
+      LANGFUSE_S3_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_USER:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  langfuse-postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-langfuse-postgres
+    profiles: [observability]
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse}
+      POSTGRES_DB: langfuse
+    volumes:
+      - ./.local/volumes/langfuse/postgres:/var/lib/postgresql/data
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24.12-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-langfuse-clickhouse
+    profiles: [observability]
+    environment:
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-langfuse}
+      CLICKHOUSE_DB: langfuse
+    volumes:
+      - ./.local/volumes/langfuse/clickhouse:/var/lib/clickhouse
+      - ./config/langfuse/clickhouse-keeper.xml:/etc/clickhouse-server/config.d/keeper.xml:ro
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  langfuse-minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-langfuse-minio
+    profiles: [observability]
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_USER:-langfuse}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_PASSWORD:-langfuse}
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./.local/volumes/langfuse/minio:/data
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:9000/minio/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  langfuse-minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [observability]
+    depends_on:
+      langfuse-minio:
+        condition: service_healthy
+    environment:
+      LANGFUSE_MINIO_USER: ${LANGFUSE_MINIO_USER:-langfuse}
+      LANGFUSE_MINIO_PASSWORD: ${LANGFUSE_MINIO_PASSWORD:-langfuse}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://langfuse-minio:9000
+        $${LANGFUSE_MINIO_USER:-langfuse} $${LANGFUSE_MINIO_PASSWORD:-langfuse};
+      mc mb --ignore-existing local/langfuse;
+      exit 0;"
+    networks:
+      - remotellm
+    restart: "no"
+
+  langfuse-redis:
+    image: redis:8-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm}-langfuse-redis
+    profiles: [observability]
+    command: redis-server --save 60 1 --loglevel warning --maxmemory-policy noeviction
+    volumes:
+      - ./.local/volumes/langfuse/redis:/data
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  remotellm:
+    driver: bridge

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v claude >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+Claude Code is not installed in this image.
+
+Enable it by setting these build args in .env, then run `make build`:
+
+  INSTALL_CLAUDE_CODE=1
+  CLAUDE_CODE_PACKAGE=@anthropic-ai/claude-code@<pinned-version>
+
+The package spec is intentionally required so builds do not silently pull latest.
+EOF
+  exit 127
+fi
+
+exec claude "$@"

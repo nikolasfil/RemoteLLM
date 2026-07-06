@@ -1,0 +1,116 @@
+# Mini PC compose — resource-constrained variant for Intel Celeron / 8 GB RAM.
+#
+# LLM access: OpenCode → LiteLLM (this machine) → external Hermes API (remote, via API key)
+# No local model weights, no GPU, no Ollama, no WireGuard.
+#
+# Workflow:
+#   1. Build images on a fast machine:  scripts/push-images-to-mini.sh
+#   2. On the mini PC: cd deploy/mini && docker compose up -d
+#   See deploy/mini/README.md for full setup instructions.
+
+name: ${COMPOSE_PROJECT_NAME:-remotellm-mini}
+
+services:
+  nginx:
+    image: nginx:1.30.2-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm-mini}-nginx
+    ports:
+      - "${NGINX_BIND:-127.0.0.1}:${NGINX_PORT:-8088}:8080"
+    environment:
+      BASE_PATH: ${BASE_PATH:-}
+      NGINX_ENVSUBST_FILTER: BASE_PATH
+    volumes:
+      - ./config/nginx/templates:/etc/nginx/templates:ro
+      - ../../config/nginx/html:/usr/share/nginx/html:ro
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+      - /etc/nginx/conf.d
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64m
+
+  litellm:
+    build:
+      context: ../..
+      dockerfile: docker/litellm/Dockerfile.slim
+      args:
+        LITELLM_VERSION: ${LITELLM_VERSION:-1.86.2}
+    image: remotellm/litellm-mini:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm-mini}-litellm
+    environment:
+      HERMES_API_URL: ${HERMES_API_URL:-https://api.hermes.example.com/v1}
+      HERMES_API_KEY: ${HERMES_API_KEY:-change-me}
+      HERMES_LITELLM_MODEL: ${HERMES_LITELLM_MODEL:-openai/hermes}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-change-me}
+      LITELLM_PROXY_BASE_URL: ${LITELLM_PROXY_BASE_URL:-http://127.0.0.1:8088${BASE_PATH:-}/api/litellm}
+      SERVER_ROOT_PATH: ${BASE_PATH:-}/api/litellm
+      LITELLM_NON_ROOT: "true"
+    volumes:
+      - ./config/litellm/config.yaml:/app/config.yaml:ro
+    command:
+      - litellm
+      - --config
+      - /app/config.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4000"
+    networks:
+      - remotellm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768m
+
+  agent:
+    image: remotellm/agent:local
+    container_name: ${COMPOSE_PROJECT_NAME:-remotellm-mini}-agent
+    depends_on:
+      - litellm
+    environment:
+      TZ: ${TZ:-Europe/Athens}
+      HOME: /home/agent
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      LC_CTYPE: C.UTF-8
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://litellm:4000/v1}
+      OPENAI_API_KEY: ${AGENT_VIRTUAL_KEY:-${LITELLM_MASTER_KEY:-change-me}}
+      TMPDIR: /home/agent/.cache/opencode/tmp
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,agent,nginx,litellm}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    working_dir: /workspace/projects
+    command: ["sleep", "infinity"]
+    volumes:
+      - ./.local/workspace/projects:/workspace/projects
+      - ./.local/workspace/inputs:/workspace/inputs:ro
+      - ./.local/workspace/outputs:/workspace/outputs
+      - ./.local/volumes/agent-home:/home/agent
+      - ./.local/volumes/opencode-home:/home/agent/.config/opencode
+    networks:
+      - remotellm
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1g
+
+networks:
+  remotellm:
+    driver: bridge

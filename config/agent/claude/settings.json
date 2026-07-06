@@ -1,0 +1,17 @@
+{
+  "model": "litellm/ollama-default",
+  "customApiKeyResponses": {},
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(git:*)",
+      "Bash(safe-npm-install:*)",
+      "Bash(safe-pip-install:*)",
+      "Bash(safe-package-check:*)"
+    ],
+    "deny": []
+  }
+}

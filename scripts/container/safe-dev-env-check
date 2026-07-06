@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="${1:-/workspace/projects}"
+
+tracked_files=(
+  ".mise.toml"
+  ".tool-versions"
+  "devbox.json"
+  "flake.nix"
+  "devenv.nix"
+  ".envrc"
+)
+
+if [[ ! -d "$root" ]]; then
+  echo "Dev environment check"
+  echo "Path: $root"
+  echo
+  echo "Directory does not exist."
+  exit 0
+fi
+
+echo "Dev environment check"
+echo "Path: $root"
+echo
+
+total=0
+for file_name in "${tracked_files[@]}"; do
+  mapfile -t matches < <(find "$root" -type f -name "$file_name" -print | sort)
+  count="${#matches[@]}"
+  total=$((total + count))
+
+  printf '%s: %s\n' "$file_name" "$count"
+  if (( count > 0 )); then
+    printf '  %s\n' "${matches[@]}"
+  fi
+done
+
+echo
+if (( total == 0 )); then
+  echo "Summary: no known dev environment files found."
+else
+  echo "Summary: found $total dev environment file(s). Review project hooks before activation."
+fi
+
+exit 0

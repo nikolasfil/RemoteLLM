@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mkdir -p \
+  "$HOME/.config" \
+  "$HOME/.codex/skills" \
+  "$HOME/.hermes" \
+  "$HOME/.hermes/skills" \
+  "$HOME/.local/bin" \
+  "$HOME/.cache" \
+  /workspace/projects \
+  /workspace/outputs \
+  /workspace/.aide \
+  /workspace/.aide/memory \
+  /workspace/.aide/state \
+  /workspace/.aide/dispatch
+
+if [[ ! -f "$HOME/.zshrc" ]]; then
+  cat > "$HOME/.zshrc" <<'EOF'
+# RemoteLLM shell bootstrap. Local customizations can go below this block.
+if [[ -f "$HOME/.remotellm.zsh" ]]; then
+  source "$HOME/.remotellm.zsh"
+fi
+EOF
+fi
+
+if ! grep -q 'source "$HOME/.remotellm.zsh"' "$HOME/.zshrc"; then
+  cat >> "$HOME/.zshrc" <<'EOF'
+
+# RemoteLLM managed shell profile.
+if [[ -f "$HOME/.remotellm.zsh" ]]; then
+  source "$HOME/.remotellm.zsh"
+fi
+EOF
+fi
+
+cp /etc/remotellm/remotellm.zsh "$HOME/.remotellm.zsh"
+
+if [[ ! -f "$HOME/.tmux.conf" && -f /etc/remotellm/tmux.conf ]]; then
+  cp /etc/remotellm/tmux.conf "$HOME/.tmux.conf"
+fi
+
+if [[ ! -f "$HOME/AGENTS.md" && -f /etc/remotellm/AGENTS.md ]]; then
+  cp /etc/remotellm/AGENTS.md "$HOME/AGENTS.md"
+fi
+
+if [[ -d /etc/remotellm/skills ]]; then
+  cp -Rn /etc/remotellm/skills/. "$HOME/.codex/skills/"
+fi
+
+# Additive Hermes skills (e.g. kanban-dispatch) — never overwrites Hermes's own
+# bundled skills or local edits, since these live under distinct, project-chosen names.
+if [[ -d /etc/remotellm/hermes-skills ]]; then
+  cp -Rn /etc/remotellm/hermes-skills/. "$HOME/.hermes/skills/"
+fi
+
+seed_if_missing() {
+  local src="$1" dst="$2"
+  [[ -f "$dst" ]] && return 0
+  mkdir -p "$(dirname "$dst")"
+  cp "$src" "$dst"
+}
+
+seed_if_missing /etc/remotellm/opencode/opencode.jsonc "$HOME/.config/opencode/opencode.jsonc"
+seed_if_missing /etc/remotellm/opencode/mcp.json "$HOME/.config/opencode/mcp.json"
+seed_if_missing /etc/remotellm/claude/settings.json "$HOME/.claude/settings.json"
+seed_if_missing /etc/remotellm/claude/CLAUDE.md "$HOME/.claude/CLAUDE.md"
+seed_if_missing /etc/remotellm/claude/mcp.json "$HOME/.claude/mcp.json"
+seed_if_missing /etc/remotellm/codex/AGENTS.md "$HOME/.codex/AGENTS.md"
+seed_if_missing /etc/remotellm/hermes/config.yaml "$HOME/.hermes/config.yaml"
+
+if [[ ! -f /workspace/.aide/README.md ]]; then
+  cat > /workspace/.aide/README.md <<'EOF'
+# RemoteLLM Memory
+
+This mounted directory is reserved for local agent memory, MCP state, and workspace notes.
+Keep durable, non-secret working memory here when an agent or MCP integration supports it.
+EOF
+fi
+
+if [[ ! -f /workspace/.aide/dispatch/README.md ]]; then
+  cat > /workspace/.aide/dispatch/README.md <<'EOF'
+# Kanban Dispatch Logs
+
+Per-task output from the kanban-dispatch Hermes skill, written by
+scripts/container/dispatch-cli: `<task_id>.<backend>.{log,json,err}`, where backend is
+"codex" or "claude-code". Safe to delete old entries; nothing reads this directory back
+except a human or the kanban card's own metadata pointing at a specific file.
+EOF
+fi
+
+# Git identity for commits made inside the agent (dispatched Codex/Claude Code included).
+# There is no credential helper configured here by default, so this enables `git commit`
+# without granting any push capability.
+[[ -n "${GIT_AUTHOR_NAME:-}" ]]  && git config --global user.name  "$GIT_AUTHOR_NAME"
+[[ -n "${GIT_AUTHOR_EMAIL:-}" ]] && git config --global user.email "$GIT_AUTHOR_EMAIL"
+
+if [[ ! -d "$HOME/.config/nvim" ]]; then
+  git clone --depth 1 https://github.com/NvChad/starter "$HOME/.config/nvim"
+fi
+
+# Ollama is optional — the agent works through Anthropic or BitNet without it.
+# This just reports whether OLLAMA_BASE_URL still points at the .env.example
+# placeholder, so a fresh setup doesn't look "broken" if Ollama was never
+# configured. See docs/guides/litellm.md and docs/guides/wireguard.md.
+echo ""
+echo "== RemoteLLM agent =="
+echo "Model gateway : ${OPENAI_BASE_URL:-http://litellm:4000/v1}"
+if [[ -z "${OLLAMA_BASE_URL:-}" || "${OLLAMA_BASE_URL}" == "http://ollama.example.internal:11434" ]]; then
+  echo "Ollama        : not configured (optional) — set OLLAMA_BASE_URL in .env to enable it"
+else
+  echo "Ollama        : configured -> ${OLLAMA_BASE_URL}"
+fi
+echo "======================"
+echo ""
+
+exec "$@"

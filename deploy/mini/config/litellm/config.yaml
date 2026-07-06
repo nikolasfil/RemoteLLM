@@ -1,0 +1,28 @@
+model_list:
+  # hermes: external Hermes API accessed via API key.
+  # HERMES_LITELLM_MODEL format: openai/<model-name-on-remote>
+  # HERMES_API_URL: base URL of the OpenAI-compatible remote endpoint.
+  # HERMES_API_KEY: API key for the remote endpoint.
+  - model_name: hermes
+    litellm_params:
+      model: os.environ/HERMES_LITELLM_MODEL
+      api_base: os.environ/HERMES_API_URL
+      api_key: os.environ/HERMES_API_KEY
+      num_ctx: 65536
+
+  # hermes-default: alias expected by the agent opencode config.
+  - model_name: hermes-default
+    litellm_params:
+      model: os.environ/HERMES_LITELLM_MODEL
+      api_base: os.environ/HERMES_API_URL
+      api_key: os.environ/HERMES_API_KEY
+      num_ctx: 65536
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  # No database_url — stateless proxy mode. Virtual key management and the
+  # admin UI are unavailable. Use LITELLM_MASTER_KEY directly.
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false

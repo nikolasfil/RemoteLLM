@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v socket >/dev/null 2>&1; then
+  exec socket npm install "$@"
+fi
+
+echo "warning: Socket CLI is unavailable; falling back to npm install plus npm audit." >&2
+npm install "$@"
+if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+  npm audit --audit-level="${NPM_AUDIT_LEVEL:-high}"
+fi

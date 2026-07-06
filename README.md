@@ -63,3 +63,7 @@ New to this project? Start with [Getting Started](docs/GETTING_STARTED.md) — i
 ## About This Project
 
 RemoteLLM was designed and directed by a human maintainer, with implementation, refactoring, and documentation carried out with substantial assistance from Claude (Anthropic). Every change was reviewed before landing, but the bulk of the code, configuration, and docs in this repository were AI-assisted rather than written line-by-line by hand. If you spot something that looks off — a stale comment, an inconsistency between docs and behavior, an edge case that wasn't considered — please open an issue; that kind of feedback is genuinely useful for a project built this way.
+
+## License
+
+[MIT](LICENSE)

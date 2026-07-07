@@ -6,6 +6,13 @@ DOCS_SRC="$ROOT_DIR/docs"
 OUT_DIR="$ROOT_DIR/config/nginx/html/docs"
 TEMPLATE="$ROOT_DIR/scripts/docs-template.html"
 
+# Root-relative prefix for sidebar links. The nginx container serves the site
+# at "/", so this defaults to empty. GitHub Pages project sites serve under
+# "/<repo>/" instead (e.g. https://user.github.io/RemoteLLM/), so CI builds
+# set BASE_PATH=/RemoteLLM to keep sidebar links from 404ing there.
+BASE_PATH="${BASE_PATH:-}"
+BASE_PATH="${BASE_PATH%/}"
+
 command -v pandoc >/dev/null || { echo "pandoc is required (apt install pandoc / brew install pandoc)"; exit 1; }
 
 # name:slug pairs for the top-level docs/*.md files (excludes docs/dev/ and docs/presentations/).
@@ -55,29 +62,29 @@ mkdir -p "$OUT_DIR/guides"
 core_links=""
 for entry in "${CORE_DOCS[@]}"; do
   name="${entry%%:*}"; slug="${entry##*:}"
-  core_links+="<a href=\"/docs/${slug}.html\">$(title_of "$DOCS_SRC/$name.md")</a>"$'\n'
+  core_links+="<a href=\"${BASE_PATH}/docs/${slug}.html\">$(title_of "$DOCS_SRC/$name.md")</a>"$'\n'
 done
 
 guide_links=""
 for f in "$DOCS_SRC"/guides/*.md; do
   base="$(basename "$f" .md)"
   [[ "$base" == "README" ]] && continue
-  guide_links+="<a href=\"/docs/guides/${base}.html\">$(title_of "$f")</a>"$'\n'
+  guide_links+="<a href=\"${BASE_PATH}/docs/guides/${base}.html\">$(title_of "$f")</a>"$'\n'
 done
 
 SIDEBAR_HTML=$(cat <<EOF
 <nav class="sidebar">
-  <a class="home-link" href="/docs/">RemoteLLM Docs</a>
+  <a class="home-link" href="${BASE_PATH}/docs/">RemoteLLM Docs</a>
   <div class="nav-section">
     <h3>Core Docs</h3>
     $core_links
   </div>
   <div class="nav-section">
     <h3>Guides</h3>
-    <a href="/docs/guides/">Guides overview</a>
+    <a href="${BASE_PATH}/docs/guides/">Guides overview</a>
     $guide_links
   </div>
-  <a class="back" href="/">&larr; Back to RemoteLLM</a>
+  <a class="back" href="${BASE_PATH}/">&larr; Back to RemoteLLM</a>
 </nav>
 EOF
 )

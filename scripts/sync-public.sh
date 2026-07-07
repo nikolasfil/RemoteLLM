@@ -58,6 +58,9 @@ EXCLUDES=(
   # Never touch the destination's own git history.
   ".git/"
 
+  # Never touch github actions 
+  ".github"
+ 
   # Internal-only documentation.
   "docs/dev/"
 

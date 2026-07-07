@@ -6,12 +6,27 @@ DOCS_SRC="$ROOT_DIR/docs"
 OUT_DIR="$ROOT_DIR/config/nginx/html/docs"
 TEMPLATE="$ROOT_DIR/scripts/docs-template.html"
 
-# Root-relative prefix for sidebar links. The nginx container serves the site
-# at "/", so this defaults to empty. GitHub Pages project sites serve under
-# "/<repo>/" instead (e.g. https://user.github.io/RemoteLLM/), so CI builds
-# set BASE_PATH=/RemoteLLM to keep sidebar links from 404ing there.
+# Root-relative prefix for sidebar links. The self-hosted nginx container
+# serves the site at "/", so this defaults to empty. GitHub Pages project
+# sites serve under "/<repo>/" instead, so the Pages workflow exports
+# BASE_PATH=<pages base path> before calling this script.
 BASE_PATH="${BASE_PATH:-}"
 BASE_PATH="${BASE_PATH%/}"
+
+# Path from BASE_PATH down to where the docs pages themselves live. The
+# self-hosted nginx setup serves this output nested under /docs/ (see
+# config/nginx/templates/default.conf.template), so that's the default.
+# The GitHub Pages workflow uploads this script's OUT_DIR as the entire
+# Pages artifact — there's no extra docs/ nesting there — so it overrides
+# this to empty. Use `${DOCS_ROOT-/docs}` (no colon) so an explicitly empty
+# override is respected rather than falling back to the default.
+DOCS_ROOT="${DOCS_ROOT-/docs}"
+
+# Where the sidebar's "back" link points. Self-hosted nginx has a running
+# app to go back to; a standalone Pages docs site doesn't, so the workflow
+# overrides both to point at the GitHub repo instead.
+BACK_URL="${BACK_URL-${BASE_PATH}/}"
+BACK_LABEL="${BACK_LABEL-&larr; Back to RemoteLLM}"
 
 command -v pandoc >/dev/null || { echo "pandoc is required (apt install pandoc / brew install pandoc)"; exit 1; }
 
@@ -62,29 +77,29 @@ mkdir -p "$OUT_DIR/guides"
 core_links=""
 for entry in "${CORE_DOCS[@]}"; do
   name="${entry%%:*}"; slug="${entry##*:}"
-  core_links+="<a href=\"${BASE_PATH}/docs/${slug}.html\">$(title_of "$DOCS_SRC/$name.md")</a>"$'\n'
+  core_links+="<a href=\"${BASE_PATH}${DOCS_ROOT}/${slug}.html\">$(title_of "$DOCS_SRC/$name.md")</a>"$'\n'
 done
 
 guide_links=""
 for f in "$DOCS_SRC"/guides/*.md; do
   base="$(basename "$f" .md)"
   [[ "$base" == "README" ]] && continue
-  guide_links+="<a href=\"${BASE_PATH}/docs/guides/${base}.html\">$(title_of "$f")</a>"$'\n'
+  guide_links+="<a href=\"${BASE_PATH}${DOCS_ROOT}/guides/${base}.html\">$(title_of "$f")</a>"$'\n'
 done
 
 SIDEBAR_HTML=$(cat <<EOF
 <nav class="sidebar">
-  <a class="home-link" href="${BASE_PATH}/docs/">RemoteLLM Docs</a>
+  <a class="home-link" href="${BASE_PATH}${DOCS_ROOT}/">RemoteLLM Docs</a>
   <div class="nav-section">
     <h3>Core Docs</h3>
     $core_links
   </div>
   <div class="nav-section">
     <h3>Guides</h3>
-    <a href="${BASE_PATH}/docs/guides/">Guides overview</a>
+    <a href="${BASE_PATH}${DOCS_ROOT}/guides/">Guides overview</a>
     $guide_links
   </div>
-  <a class="back" href="${BASE_PATH}/">&larr; Back to RemoteLLM</a>
+  <a class="back" href="${BACK_URL}">${BACK_LABEL}</a>
 </nav>
 EOF
 )

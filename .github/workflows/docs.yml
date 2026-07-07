@@ -31,6 +31,9 @@ jobs:
       - name: Build docs
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          DOCS_ROOT: ""
+          BACK_URL: https://github.com/nikolasfil/RemoteLLM
+          BACK_LABEL: "&larr; View on GitHub"
         run: ./scripts/build-docs.sh
 
       - name: Upload pages artifact

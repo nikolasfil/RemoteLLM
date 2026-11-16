@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v pi >/dev/null 2>&1; then
+  cat >&2 <<'MSG'
+Pi coding agent is not installed in this image.
+
+Enable it by setting these build args in .env, then run `make build`:
+
+  INSTALL_PI_AGENT=1
+  PI_AGENT_PACKAGE=@earendil-works/pi-coding-agent@<pinned-version>
+
+The package spec is intentionally required so builds do not silently pull latest.
+MSG
+  exit 127
+fi
+
+exec pi "$@"

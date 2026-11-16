@@ -6,7 +6,7 @@ OpenCode is the default AI coding agent in RemoteLLM. It is pre-installed in the
 
 - Interactive terminal-based AI coding agent
 - Reads, edits, and runs files directly in the workspace
-- OpenAI-compatible API backend (connects to LiteLLM)
+- Native provider login or explicitly configured OpenAI-compatible backend
 - Optional browser web UI mode on a dedicated port
 - Session state and history persisted to `.local/volumes/opencode-home/`
 - Version-pinned via `OPENCODE_VERSION` build arg
@@ -24,7 +24,7 @@ make agent     # shortcut: exec into agent and run opencode
 opencode
 ```
 
-OpenCode connects to LiteLLM at `http://litellm:4000/v1` using the `OPENAI_API_KEY` environment variable (set to `AGENT_VIRTUAL_KEY` or `LITELLM_MASTER_KEY`).
+Run `opencode auth login` and select your provider/model. The seeded configuration does not disable native providers or preselect a gateway. See [LiteLLM](../LITELLM.md) for optional gateway configuration.
 
 ### Running the Web UI
 
@@ -50,7 +50,7 @@ OpenCode persists conversation history and config to `.local/volumes/opencode-ho
 
 ### Switching Models
 
-OpenCode uses whatever model LiteLLM serves under the `ollama-default` alias. To switch models:
+Select a model in OpenCode. Only when explicitly using the optional LiteLLM `ollama-default` alias, switch the upstream Ollama model with:
 
 ```dotenv
 OLLAMA_MODEL=another-model:tag
@@ -64,7 +64,7 @@ OpenCode supports MCP (Model Context Protocol) servers. The seeded MCP config is
 
 ## Limitations
 
-- **External account not required**, but requires LiteLLM to be healthy. If LiteLLM is down, OpenCode cannot reach any model.
+- Configure and authenticate a provider before requesting a model. LiteLLM is needed only if you select gateway routing.
 - **Web UI password** (`OPENCODE_SERVER_PASSWORD`) defaults to `change-me`. Change it before using `make up-opencode-web` on a shared or LAN-exposed host.
 - **Session state is local.** OpenCode history in `.local/volumes/opencode-home/` is not shared between the terminal and web UI modes.
 - **Single concurrent session.** Running `make agent` and the web UI simultaneously on the same volume may cause state conflicts.

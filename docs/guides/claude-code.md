@@ -63,26 +63,16 @@ Verify with `claude auth status` inside the container, or check that
 at LiteLLM, per the next section), Claude Code bills at API rates and ignores the
 subscription entirely. Use one path or the other, not both.
 
-### Routing Through LiteLLM (Recommended)
+### Optional LiteLLM routing
 
-To route Claude Code through LiteLLM (enables virtual key scoping and Langfuse tracing):
+Start the gateway with `make up-onlineagents` and configure an agent-specific
+`ANTHROPIC_BASE_URL=http://litellm:4000` and `ANTHROPIC_API_KEY` containing a scoped
+virtual key. Keep the real upstream Anthropic key in the gateway's environment
+or credential store. Use a service-specific Compose override to separate these
+keys; the shared `.env` uses one `ANTHROPIC_API_KEY` by default.
 
-```dotenv
-ANTHROPIC_BASE_URL=http://litellm:4000
-ANTHROPIC_API_KEY=          # leave empty; CLAUDE_VIRTUAL_KEY is used via OPENAI_API_KEY
-CLAUDE_VIRTUAL_KEY=sk-...   # scoped to claude-default model, 20 req/min
-```
-
-Also set in `config/litellm/config.yaml`:
-
-```yaml
-- model_name: claude-default
-  litellm_params:
-    model: anthropic/claude-sonnet-4-6
-    api_key: os.environ/ANTHROPIC_API_KEY
-```
-
-And set `ANTHROPIC_API_KEY` (the real key) in `.env` so LiteLLM can use it.
+There is no `CLAUDE_VIRTUAL_KEY` fallback through `OPENAI_API_KEY`. See
+[LiteLLM](../LITELLM.md) for optional setup.
 
 ### Routing Directly to Anthropic
 
@@ -123,7 +113,7 @@ Claude Code state (conversation history, config, tool permissions) is persisted 
 | Via LiteLLM | Real Anthropic key in `litellm` container only; agent holds a scoped virtual key |
 | Direct Anthropic | Real Anthropic key in `claude` container |
 
-The LiteLLM routing mode is preferred because it limits key exposure and enables Langfuse tracing.
+Select native login, direct API access, or optional gateway routing explicitly.
 
 ## Hardware Requirements
 

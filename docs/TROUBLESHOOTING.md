@@ -49,14 +49,14 @@ If it is missing, copy it manually:
 
 ```sh
 mkdir -p .local/volumes/wireguard/wg_confs
-cp /home/figaro/Programms/Wireguard/wireguard.conf .local/volumes/wireguard/wg_confs/wg0.conf
+cp /path/to/wireguard.conf .local/volumes/wireguard/wg_confs/wg0.conf
 chmod 600 .local/volumes/wireguard/wg_confs/wg0.conf
 ```
 
 Or set `.env`:
 
 ```dotenv
-WIREGUARD_SOURCE=/home/figaro/Programms/Wireguard/wireguard.conf
+WIREGUARD_SOURCE=/path/to/wireguard.conf
 COPY_WIREGUARD_CONFIG=1
 ```
 
@@ -167,7 +167,7 @@ Any `ImportError` or `RuntimeError` in that output explains why the route was no
 
 ## Hermes Shows Only 3 Models
 
-Hermes fetches its model list from LiteLLM at `http://litellm:4000/v1`. It shows exactly the models defined in `config/litellm/config.yaml`. Add new entries there and run `make restart-litellm` to make them appear.
+When explicitly configured for the optional gateway, Hermes fetches its model list from LiteLLM at `http://litellm:4000/v1`. It shows exactly the models defined in `config/litellm/config.yaml`. Add new entries there and run `make restart-litellm` to make them appear.
 
 ## Running Behind Another nginx
 

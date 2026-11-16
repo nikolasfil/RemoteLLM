@@ -34,10 +34,10 @@ Warnings need human review. A blocking error means the rendered stack includes a
 
 - Keep `NGINX_BIND=127.0.0.1` unless LAN exposure is intended.
 - Replace `CODE_SERVER_PASSWORD`, `TTYD_PASSWORD`, `LITELLM_MASTER_KEY`, `LITELLM_SALT_KEY`, `LITELLM_UI_PASSWORD`, and `LITELLM_DB_PASSWORD` before exposing browser tools.
-- Create per-role virtual keys (`make litellm-keys`) and set `AGENT_VIRTUAL_KEY`, `HERMES_VIRTUAL_KEY`, `CLAUDE_VIRTUAL_KEY` in `.env`. Agents should never hold `LITELLM_MASTER_KEY`.
+- When enabling optional LiteLLM routing, create scoped keys (`make litellm-keys`) and explicitly configure the selected key in each agent. Agents should never hold `LITELLM_MASTER_KEY`.
 - Do not change `LITELLM_SALT_KEY` after first boot — it encrypts stored virtual keys.
 - Keep WireGuard config under `.local/volumes/wireguard/wg_confs/wg0.conf` with `0600` permissions.
-- Keep model traffic routed through LiteLLM and `OLLAMA_PROXY`; do not set global proxy variables in the agent shell unless intentionally routing all package-manager traffic through the VPN.
+- Use the selected provider directly, or explicitly enable LiteLLM routing. Keep VPN proxy configuration specific to model traffic.
 - Do not mount `/var/run/docker.sock` into agent containers unless a task explicitly needs host Docker control.
 - Use `safe-npm-install`, `safe-pip-install`, and `safe-package-check` before adding dependencies.
 - Pin optional agent CLI package specs before enabling Codex CLI or Claude Code builds.

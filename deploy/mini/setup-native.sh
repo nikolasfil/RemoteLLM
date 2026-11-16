@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Native (non-Docker) setup for the mini PC.
 # Installs: zsh, oh-my-zsh, neovim, btop, ranger, opencode.
-# Writes opencode config pointing at LiteLLM and a .env template.
+# Writes provider-neutral OpenCode config and an optional environment template.
 #
 # Requires: Debian/Ubuntu-based Linux, sudo access.
 # Idempotent — safe to re-run.
@@ -9,9 +9,6 @@
 set -euo pipefail
 
 OPENCODE_VERSION="${OPENCODE_VERSION:-1.15.12}"
-LITELLM_URL="${LITELLM_URL:-http://127.0.0.1:4000/v1}"
-LITELLM_API_KEY="${LITELLM_API_KEY:-change-me}"
-HERMES_MODEL="${HERMES_MODEL:-hermes}"
 
 log() { printf '\n\033[1;34m[setup-native]\033[0m %s\n' "$*"; }
 ok()  { printf '\033[1;32m  ✓\033[0m %s\n' "$*"; }
@@ -102,7 +99,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 3: opencode config pointing at LiteLLM proxy
+# Phase 3: provider-neutral OpenCode config
 # ---------------------------------------------------------------------------
 log "Phase 3: opencode config"
 
@@ -115,23 +112,7 @@ if [ ! -f "$OPENCODE_CONFIG" ]; then
 {
   "\$schema": "https://opencode.ai/config.schema.json",
   "share": "disabled",
-  "provider": {
-    "litellm": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteLLM (mini)",
-      "options": {
-        "baseURL": "${LITELLM_URL}",
-        "apiKey": "{env:OPENAI_API_KEY}"
-      },
-      "models": {
-        "${HERMES_MODEL}": {
-          "name": "Hermes (remote)"
-        }
-      }
-    }
-  },
-  "model": "litellm/${HERMES_MODEL}",
-  "disabled_providers": ["openai", "anthropic", "google", "bedrock", "azure"]
+  "instructions": []
 }
 EOF
     ok "opencode config written to $OPENCODE_CONFIG"
@@ -140,7 +121,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 4: .env template with HERMES_API_KEY placeholder
+# Phase 4: optional provider environment template
 # ---------------------------------------------------------------------------
 log "Phase 4: environment file"
 
@@ -153,14 +134,14 @@ if [ ! -f "$ENV_FILE" ]; then
 #
 # Fill in the values below before sourcing.
 
-# LiteLLM API key (LITELLM_MASTER_KEY set in deploy/mini/.env).
-export OPENAI_API_KEY=change-me
+# Optional provider API key. Prefer native agent login when supported.
+# export OPENAI_API_KEY=<your-provider-key>
 
-# LiteLLM base URL — use 127.0.0.1:4000 (direct) or :8088/api/litellm (via nginx).
-export OPENAI_BASE_URL=http://127.0.0.1:4000/v1
+# Optional provider endpoint. Leave unset for native provider defaults.
+# export OPENAI_BASE_URL=<your-provider-endpoint>
 EOF
     ok "env template written to $ENV_FILE"
-    printf '\033[1;33m  → Edit %s and add your LITELLM_MASTER_KEY as OPENAI_API_KEY.\033[0m\n' "$ENV_FILE"
+    printf '\033[1;33m  → Edit %s and configure a provider if needed.\033[0m\n' "$ENV_FILE"
 else
     ok "env file already exists at $ENV_FILE"
 fi
@@ -184,6 +165,6 @@ fi
 log "Setup complete"
 printf '\nNext steps:\n'
 printf '  1. Source the env file:  source %s\n' "$ENV_FILE"
-printf '  2. Start LiteLLM:        cd deploy/mini && docker compose up -d litellm\n'
+printf '  2. Configure your provider using opencode auth login\n'
 printf '  3. Run opencode:         opencode\n'
 printf '\nOr use zsh as your default shell:  chsh -s /usr/bin/zsh\n'

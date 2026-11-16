@@ -9,7 +9,7 @@ just need setup steps, go straight to [Setup](SETUP.md).
 
 RemoteLLM is a Docker Compose workspace that gives you a browser-based coding
 environment (IDE + terminal) wired up to one or more AI coding agents (OpenCode,
-Claude Code, Codex, Hermes), all routed through a single model gateway (LiteLLM). It
+Claude Code, Codex, Hermes, Pi, jcode), using native provider login or optional LiteLLM routing. It
 exists to solve one problem: running an AI coding agent needs somewhere to send model
 requests, and you may want that "somewhere" to be a model you host yourself rather than
 a third-party API — without turning your whole development machine into a VPN client
@@ -73,8 +73,8 @@ For someone who has never touched this repository before:
    ```
    This creates `.env` from `.env.example` and the runtime directories under `.local/`.
 3. **Edit `.env`** and change every `change-me` password
-   (`CODE_SERVER_PASSWORD`, `TTYD_PASSWORD`, `LITELLM_MASTER_KEY`, `LITELLM_SALT_KEY`,
-   `LITELLM_DB_PASSWORD`, `LITELLM_UI_PASSWORD`, `DEV_PASSWORD`). Leave the Ollama and
+   (`CODE_SERVER_PASSWORD`, `TTYD_PASSWORD`, `DEV_PASSWORD`). Configure LiteLLM
+   credentials separately only if you enable the optional gateway. Leave the Ollama and
    WireGuard sections as their defaults for now — see the model backend section above.
 4. **Build and start the core stack plus the browser IDE**:
    ```sh
@@ -99,6 +99,13 @@ For someone who has never touched this repository before:
 From here, [Setup](SETUP.md) covers every option in depth, and
 [Operations](OPERATIONS.md) covers day-to-day commands.
 
+## Provider setup
+
+Start OpenCode and select a provider using `opencode auth login`, or use the chosen
+CLI's own login/configuration. No LiteLLM endpoint or model is forced. Optional
+[Pi](guides/pi.md), [jcode](guides/jcode.md), and [agent-here](guides/agent-here.md)
+have dedicated guides. LiteLLM starts only through explicit opt-in commands.
+
 ## Tool Matrix: Mandatory vs Optional
 
 **Mandatory** — always part of the stack, start with plain `make up`:
@@ -106,7 +113,6 @@ From here, [Setup](SETUP.md) covers every option in depth, and
 | Tool | Role |
 |---|---|
 | `nginx` | Single browser entry point; reverse-proxies everything else |
-| `litellm` + `litellm-postgres` | Model gateway; every agent and IDE tool routes through it |
 | `agent` | The base coding-agent container; OpenCode is pre-installed inside it |
 
 **Optional — pick a model backend** (at least one, or agents have nothing to call):
@@ -137,6 +143,8 @@ From here, [Setup](SETUP.md) covers every option in depth, and
 
 | Tool | Enable with |
 |---|---|
+| LiteLLM + PostgreSQL | `make build-onlineagents` then `make up-onlineagents`; configure agents explicitly |
+| Pi / jcode | Enable the CLI in `.env`, pin its package/release, rebuild, then `make pi` / `make jcode` |
 | WireGuard + vpn-proxy | `make up-vpn` (see "Why WireGuard" above) |
 | Nix Agent (Devbox/Nix envs) | `make up-nix` |
 | Playwright MCP | `make up-playwright` |
@@ -160,8 +168,7 @@ off.
 - **BitNet** (`cpu-llm` profile) — CPU-only local inference. Useful as a genuinely
   offline fallback, but the maintainer's daily driver is Anthropic or a remote Ollama
   model, not BitNet.
-- **Continue** (the code-server IDE extension, paired with LiteLLM) — seeded and wired
-  to the `ollama-default` alias, but the maintainer primarily uses the agent CLIs
+- **Continue** (the code-server IDE extension) — seeded with an empty model list; configure a provider before use, but the maintainer primarily uses the agent CLIs
   (OpenCode, Claude Code) rather than in-editor autocomplete/chat.
 
 Everything else in the tool matrix above — including WireGuard, the other agent CLIs,

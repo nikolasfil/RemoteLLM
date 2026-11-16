@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v jcode >/dev/null 2>&1; then
+  cat >&2 <<'MSG'
+jcode is not installed in this image.
+
+Enable it by setting these build args in .env, then run `make build`:
+
+  INSTALL_JCODE=1
+  JCODE_VERSION=<pinned release tag, e.g. v0.88.0>
+
+The version is intentionally required so builds do not silently pull latest.
+The release tarball is verified against the published SHA256SUMS.
+MSG
+  exit 127
+fi
+
+export JCODE_NO_TELEMETRY=1
+exec jcode --no-update "$@"

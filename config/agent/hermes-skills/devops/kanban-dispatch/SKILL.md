@@ -221,3 +221,11 @@ non-worktree workspace, flag it in a comment rather than silently racing.
 - **Don't forget `pty=true` for Codex.** Without it the `terminal` call hangs.
 - **Don't claim `kanban_complete` on code changes without review** unless the task is
   genuinely trivial — see the `kanban-worker` skill's review-required convention.
+
+## Additional backends
+
+`dispatch-cli pi <task_id> <workspace_dir> <prompt>` and
+`dispatch-cli jcode <task_id> <workspace_dir> <prompt>` use the same log and
+`EXIT:<code>` convention. Install and authenticate each CLI first. Optional
+`DISPATCH_PI_PROVIDER`, `DISPATCH_PI_MODEL`, `DISPATCH_JCODE_PROVIDER`, and
+`DISPATCH_JCODE_MODEL` select a provider/model; otherwise each CLI uses its own configuration.

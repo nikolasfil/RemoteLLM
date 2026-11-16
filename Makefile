@@ -22,6 +22,9 @@ build:
 build-agent:
 	$(COMPOSE) build agent
 
+build-onlineagents:
+	$(COMPOSE) --profile onlineagents build litellm
+
 build-bitnet:
 	$(COMPOSE) --profile cpu-llm build bitnet
 
@@ -54,8 +57,11 @@ up-playwright:
 up-cpu-llm:
 	$(COMPOSE) --profile cpu-llm up -d bitnet
 
+up-onlineagents:
+	$(COMPOSE) --profile onlineagents up -d litellm
+
 up-full:
-	$(COMPOSE) --profile vpn --profile ide --profile web-terminal --profile codex --profile claude --profile hermes --profile hermes-web --profile opencode-web --profile observability --profile playwright --profile nix --profile cpu-llm up -d
+	$(COMPOSE) --profile vpn --profile ide --profile web-terminal --profile codex --profile claude --profile hermes --profile hermes-web --profile opencode-web --profile observability --profile playwright --profile nix --profile cpu-llm --profile pi --profile jcode --profile onlineagents up -d
 
 # ── Stop ───────────────────────────────────────────────────────────────────
 
@@ -65,8 +71,11 @@ down:
 down-vpn:
 	$(COMPOSE) --profile vpn stop vpn-proxy wireguard
 
+down-onlineagents:
+	$(COMPOSE) --profile onlineagents stop litellm litellm-postgres
+
 down-full:
-	$(COMPOSE) --profile vpn --profile ide --profile web-terminal --profile codex --profile claude --profile hermes --profile hermes-web --profile opencode-web --profile observability --profile playwright --profile nix --profile cpu-llm down --remove-orphans
+	$(COMPOSE) --profile vpn --profile ide --profile web-terminal --profile codex --profile claude --profile hermes --profile hermes-web --profile opencode-web --profile observability --profile playwright --profile nix --profile cpu-llm --profile pi --profile jcode --profile onlineagents down --remove-orphans
 
 # ── Logs & Status ──────────────────────────────────────────────────────────
 
@@ -99,6 +108,12 @@ codex:
 
 claude:
 	$(COMPOSE) --profile claude run --rm claude
+
+pi:
+	$(COMPOSE) --profile pi run --rm pi
+
+jcode:
+	$(COMPOSE) --profile jcode run --rm jcode
 
 hermes:
 	$(COMPOSE) --profile hermes run --rm hermes
@@ -137,7 +152,7 @@ refresh-agent:
 	$(COMPOSE) exec agent setup-agent true
 
 restart-litellm:
-	$(COMPOSE) restart litellm
+	$(COMPOSE) --profile onlineagents restart litellm
 
 download-bitnet-model:
 	./scripts/download-bitnet-model.sh
@@ -158,7 +173,7 @@ litellm-keys:
 	  -H "Content-Type: application/json" \
 	  -d '{"key_alias":"claude-agent","models":["claude-default"],"rpm_limit":20}' | jq -r '.key') && \
 	echo "" && \
-	echo "Add these to .env:" && \
+	echo "Save these optional role keys securely; configure the chosen key in your agent:" && \
 	echo "AGENT_VIRTUAL_KEY=$$AGENT" && \
 	echo "HERMES_VIRTUAL_KEY=$$HERMES" && \
 	echo "CLAUDE_VIRTUAL_KEY=$$CLAUDE"
@@ -187,10 +202,12 @@ help:
 	  'Build' \
 	  '  make build                 Build all custom images' \
 	  '  make build-agent           Rebuild only the agent image (also used by codex, claude, web-terminal)' \
+	  '  make build-onlineagents    Build the optional LiteLLM gateway' \
 	  '  make build-bitnet          Build the BitNet CPU inference image (cpu-llm profile)' \
 	  '' \
 	  'Start' \
-	  '  make up                    Core stack (litellm, agent, nginx; VPN stays off)' \
+	  '  make up                    Core stack (agent, nginx; LiteLLM and VPN stay off)' \
+	  '  make up-onlineagents       Start optional LiteLLM and its database' \
 	  '  make up-vpn                Manually start WireGuard and vpn-proxy' \
 	  '  make up-ide                Core + browser IDE (code-server) + web terminal (ttyd)' \
 	  '  make up-nix                Nix-enabled agent (devbox support)' \
@@ -205,10 +222,13 @@ help:
 	  '  make agent                 Run opencode in the agent container' \
 	  '  make codex                 Run Codex CLI (set INSTALL_CODEX_CLI=1 and rebuild first)' \
 	  '  make claude                Run Claude Code (set INSTALL_CLAUDE_CODE=1 and rebuild first)' \
+	  '  make pi                    Run Pi (INSTALL_PI_AGENT=1 and rebuild first)' \
+	  '  make jcode                 Run jcode (INSTALL_JCODE=1 and rebuild first)' \
 	  '  make hermes                Run Hermes Agent (set INSTALL_HERMES_AGENT=1 and rebuild first)' \
 	  '' \
 	  'Shells' \
 	  '  make shell                 zsh in the main agent container' \
+	  '  scripts/agent-here         Run a one-off agent in the current directory' \
 	  '  make shell-nix             zsh in the Nix-enabled agent (run make up-nix first)' \
 	  '  make devbox-shell          devbox shell in the Nix-enabled agent' \
 	  '' \
@@ -238,15 +258,16 @@ help:
 	  '' \
 	  'Stop' \
 	  '  make down                  Stop the core stack' \
+	  '  make down-onlineagents     Stop optional LiteLLM and its database' \
 	  '  make down-vpn              Stop WireGuard and vpn-proxy' \
 	  '  make down-full             Stop all profiles and remove orphan containers'
 
 .PHONY: init wireguard-config \
-        build build-agent build-bitnet \
-        up up-vpn up-ide up-nix up-hermes-web up-opencode-web up-observability up-playwright up-cpu-llm up-full \
-        down down-vpn down-full \
+        build build-agent build-bitnet build-onlineagents \
+        up up-onlineagents up-vpn up-ide up-nix up-hermes-web up-opencode-web up-observability up-playwright up-cpu-llm up-full \
+        down down-onlineagents down-vpn down-full \
         ps status logs logs-agent logs-langfuse logs-nginx \
-        agent codex claude hermes \
+        agent codex claude pi jcode hermes \
         shell shell-nix devbox-shell \
         test-vpn audit-deps check-dev-env security-review security-review-mcp \
         refresh-agent restart-litellm litellm-keys download-bitnet-model backup config docs help

@@ -1,6 +1,6 @@
 # Mini PC compose — resource-constrained variant for Intel Celeron / 8 GB RAM.
 #
-# LLM access: OpenCode → LiteLLM (this machine) → external Hermes API (remote, via API key)
+# LLM access: native provider configuration by default; optional LiteLLM gateway.
 # No local model weights, no GPU, no Ollama, no WireGuard.
 #
 # Workflow:
@@ -40,6 +40,7 @@ services:
           memory: 64m
 
   litellm:
+    profiles: ["onlineagents"]
     build:
       context: ../..
       dockerfile: docker/litellm/Dockerfile.slim
@@ -79,16 +80,15 @@ services:
   agent:
     image: remotellm/agent:local
     container_name: ${COMPOSE_PROJECT_NAME:-remotellm-mini}-agent
-    depends_on:
-      - litellm
     environment:
       TZ: ${TZ:-Europe/Athens}
       HOME: /home/agent
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
       LC_CTYPE: C.UTF-8
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://litellm:4000/v1}
-      OPENAI_API_KEY: ${AGENT_VIRTUAL_KEY:-${LITELLM_MASTER_KEY:-change-me}}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       TMPDIR: /home/agent/.cache/opencode/tmp
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,agent,nginx,litellm}
     user: "${PUID:-1000}:${PGID:-1000}"

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Empty endpoint/key placeholders must not override native provider defaults.
+for provider_var in LOCAL_ENDPOINT OPENAI_BASE_URL OPENAI_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_API_KEY; do
+  [[ -n "${!provider_var:-}" ]] || unset "$provider_var"
+done
+
 mkdir -p \
   "$HOME/.config" \
   "$HOME/.codex/skills" \
@@ -68,6 +73,9 @@ seed_if_missing /etc/remotellm/claude/CLAUDE.md "$HOME/.claude/CLAUDE.md"
 seed_if_missing /etc/remotellm/claude/mcp.json "$HOME/.claude/mcp.json"
 seed_if_missing /etc/remotellm/codex/AGENTS.md "$HOME/.codex/AGENTS.md"
 seed_if_missing /etc/remotellm/hermes/config.yaml "$HOME/.hermes/config.yaml"
+seed_if_missing /etc/remotellm/pi/models.json "$HOME/.pi/agent/models.json"
+seed_if_missing /etc/remotellm/pi/settings.json "$HOME/.pi/agent/settings.json"
+seed_if_missing /etc/remotellm/jcode/mcp.json "$HOME/.jcode/mcp.json"
 
 if [[ ! -f /workspace/.aide/README.md ]]; then
   cat > /workspace/.aide/README.md <<'EOF'
@@ -84,12 +92,12 @@ if [[ ! -f /workspace/.aide/dispatch/README.md ]]; then
 
 Per-task output from the kanban-dispatch Hermes skill, written by
 scripts/container/dispatch-cli: `<task_id>.<backend>.{log,json,err}`, where backend is
-"codex" or "claude-code". Safe to delete old entries; nothing reads this directory back
+"codex", "claude-code", "opencode", "pi" or "jcode". Safe to delete old entries; nothing reads this directory back
 except a human or the kanban card's own metadata pointing at a specific file.
 EOF
 fi
 
-# Git identity for commits made inside the agent (dispatched Codex/Claude Code included).
+# Git identity for commits made inside the agent (dispatched Codex/Claude Code/Pi/jcode included).
 # There is no credential helper configured here by default, so this enables `git commit`
 # without granting any push capability.
 [[ -n "${GIT_AUTHOR_NAME:-}" ]]  && git config --global user.name  "$GIT_AUTHOR_NAME"
@@ -105,7 +113,7 @@ fi
 # configured. See docs/guides/litellm.md and docs/guides/wireguard.md.
 echo ""
 echo "== RemoteLLM agent =="
-echo "Model gateway : ${OPENAI_BASE_URL:-http://litellm:4000/v1}"
+echo "Model gateway : ${OPENAI_BASE_URL:-provider login / agent configuration}"
 if [[ -z "${OLLAMA_BASE_URL:-}" || "${OLLAMA_BASE_URL}" == "http://ollama.example.internal:11434" ]]; then
   echo "Ollama        : not configured (optional) — set OLLAMA_BASE_URL in .env to enable it"
 else

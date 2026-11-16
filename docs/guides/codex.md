@@ -43,9 +43,8 @@ directly to OpenAI — see "Model and API" below) or a ChatGPT Plus/Pro/Business
 subscription login, no API key required. To set up the subscription path:
 
 ```sh
-# Run with the LiteLLM-routed key cleared, so the ChatGPT OAuth flow is what gets
-# persisted instead of a placeholder API key:
-docker compose --profile codex run --rm -e OPENAI_API_KEY= codex
+# Leave OPENAI_API_KEY and OPENAI_BASE_URL empty for native login:
+make codex
 ```
 
 Inside the container, run `codex login` and complete the browser OAuth flow. On a
@@ -61,9 +60,10 @@ Verify with `codex login status` inside the container, or check that
 
 ### Model and API
 
-Codex CLI calls `http://litellm:4000/v1` (same as all other agents) using the `OPENAI_API_KEY` environment variable set to `AGENT_VIRTUAL_KEY` or `LITELLM_MASTER_KEY`.
-
-To use an OpenAI model directly instead of routing through LiteLLM, set `OPENAI_API_KEY` to a real OpenAI key and update `OPENAI_BASE_URL` to `https://api.openai.com/v1`.
+Use Codex login or configure your chosen provider/model explicitly. No gateway
+endpoint or `ollama-default` model is forced. For an OpenAI-compatible endpoint,
+set `OPENAI_BASE_URL` and `OPENAI_API_KEY` in `.env`. LiteLLM requires explicit
+startup with `make up-onlineagents` and provider configuration.
 
 ### State
 

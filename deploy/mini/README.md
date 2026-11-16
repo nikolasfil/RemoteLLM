@@ -7,7 +7,7 @@ Target hardware: Intel Celeron, 2 cores, 8 GB RAM, no GPU, Debian/Ubuntu-based L
 ```
 OpenCode (native or in agent container)
     ↓
-LiteLLM proxy (this machine, Docker)
+Optional LiteLLM proxy (explicit gateway mode)
     ↓
 External Hermes API (remote machine, via Tailscale or LAN)
 ```
@@ -18,7 +18,7 @@ No local model weights. No GPU required. The machine is a thin agent runner.
 
 - Docker + Docker Compose v2 installed
 - SSH access from your build machine to the mini PC
-- External Hermes API URL and key (see `.env.example`)
+- A configured agent provider; external Hermes API URL/key only for optional gateway mode
 
 ## Option A — Docker setup (recommended)
 
@@ -40,7 +40,8 @@ MINI_HOST=user@mini-pc.tailnet ./scripts/push-images-to-mini.sh
 ```bash
 cd deploy/mini
 cp .env.example .env
-# Edit .env: set HERMES_API_URL, HERMES_API_KEY, LITELLM_MASTER_KEY
+# Edit .env: choose native provider login or explicitly configure an API endpoint.
+# Optional gateway only: set HERMES_API_URL, HERMES_API_KEY, LITELLM_MASTER_KEY
 ```
 
 ### 3. Start services
@@ -51,10 +52,10 @@ docker compose up -d
 
 # Verify all containers are healthy
 docker compose ps
-docker compose logs -f litellm
+docker compose logs -f agent
 ```
 
-LiteLLM API is available at `http://127.0.0.1:8088/api/litellm`.
+If explicitly enabled, LiteLLM is available through nginx at `http://127.0.0.1:8088/api/litellm`.
 
 ### 4. Attach to the agent container and run opencode
 
@@ -81,7 +82,7 @@ Use when Docker overhead is unacceptable or a tool needs direct hardware access.
 ./setup-native.sh
 ```
 
-This installs: zsh, oh-my-zsh, neovim, btop, ranger, and opencode. It writes an opencode config pointing at LiteLLM (which must still be running in Docker unless you also run LiteLLM natively).
+This installs: zsh, oh-my-zsh, neovim, btop, ranger, and opencode. It writes a provider-neutral OpenCode config. Configure your provider with `opencode auth login`; no gateway is required.
 
 ## RAM budget
 
@@ -99,13 +100,26 @@ This installs: zsh, oh-my-zsh, neovim, btop, ranger, and opencode. It writes an 
 | Port | Service |
 |------|---------|
 | 127.0.0.1:8088 | nginx (reverse proxy) |
-| 127.0.0.1:4000 | LiteLLM API (direct, no nginx) |
+| Docker network only: litellm:4000 | Optional LiteLLM API |
 
 Access via SSH tunnel (`ssh -L 8088:127.0.0.1:8088 user@mini-pc`) or Tailscale.
 
 ## Image variants
 
 LiteLLM uses `docker/litellm/Dockerfile.slim` (Debian bookworm-slim) in this stack. An Alpine variant (`Dockerfile.alpine`) exists as an experimental fallback but is not the default because LiteLLM's Python dependencies require glibc binary wheels.
+
+## Optional gateway
+
+Default `docker compose up -d` starts nginx and the agent. Configure a provider
+using OpenCode login. To use the local gateway explicitly:
+
+```sh
+docker compose --profile onlineagents up -d litellm
+```
+
+Then configure OpenCode with the provider snippet in [LiteLLM](../../docs/LITELLM.md).
+The mini gateway has no PostgreSQL or virtual-key store; use its configured local
+key for this minimal deployment. No agent key or endpoint is assigned automatically.
 
 ## Troubleshooting
 

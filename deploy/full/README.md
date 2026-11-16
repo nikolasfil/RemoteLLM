@@ -15,8 +15,9 @@ The full stack lives at the repository root: `compose.yml`.
 
 ```bash
 cp .env.example .env
-# Edit .env — set OLLAMA_BASE_URL, LITELLM_MASTER_KEY, passwords
+# From the repository root: edit .env passwords; choose a provider in the agent.
 make init
+make build-agent
 make up
 ```
 
@@ -28,12 +29,20 @@ See `docs/SETUP.md` for full instructions, WireGuard setup, and service configur
 |---------|---------|
 | wireguard | VPN tunnel to remote Ollama host |
 | vpn-proxy | SOCKS5 proxy inside the WireGuard network |
-| litellm | Model gateway (routes to Ollama via VPN) |
-| litellm-postgres | State store for LiteLLM virtual keys and admin UI |
+| litellm | Optional model gateway (`onlineagents` profile) |
+| litellm-postgres | Optional gateway state store (`onlineagents` profile) |
 | nginx | Reverse proxy with browser IDE and terminal |
 | agent | Main coding agent container (opencode, zsh, nvim) |
 | langfuse-* | Observability stack (optional `observability` profile) |
 | playwright-mcp | Browser automation MCP server (optional `playwright` profile) |
+
+## Optional services
+
+`make up` starts only the agent and nginx. Pi and jcode are opt-in builds with
+`make pi` / `make jcode` launch targets. LiteLLM requires `make build-onlineagents`
+and `make up-onlineagents`, followed by explicit agent provider configuration.
+The `compose.yml` here mirrors the root variant; use the root checkout for Make
+commands and the shared Dockerfiles/configuration.
 
 ## Choosing between full and mini
 

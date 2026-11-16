@@ -23,7 +23,7 @@ The `agent` service is the primary long-running development container. It provid
 ### Starting the Agent
 
 ```sh
-make up         # start core stack (agent + litellm + nginx)
+make up         # start core stack (agent + nginx)
 make up-vpn     # optional: start WireGuard + vpn-proxy when needed
 make shell      # attach a shell to the running agent container
 ```
@@ -100,6 +100,11 @@ docker compose --profile ide --profile web-terminal up -d agent web-terminal
 
 For one-off packages that don't survive container recreation, use `sudo apt-get install` inside the shell.
 
+### Project-local launcher
+
+Use [agent-here](agent-here.md) to mount the current host directory into a one-off
+container while sharing persistent agent state. It starts no dependencies.
+
 ### Opt-In CLIs
 
 Enable Codex CLI at build time:
@@ -115,6 +120,11 @@ Enable Claude Code:
 INSTALL_CLAUDE_CODE=1
 CLAUDE_CODE_PACKAGE=@anthropic-ai/claude-code@<version>
 ```
+
+Enable [Pi](pi.md) with `INSTALL_PI_AGENT=1` and a pinned `PI_AGENT_PACKAGE`, or
+[jcode](jcode.md) with `INSTALL_JCODE=1` and a pinned `JCODE_VERSION`. Their launch
+targets are `make pi` and `make jcode`. Use each CLI's native provider configuration;
+LiteLLM is optional.
 
 Enable Hermes Agent (choose one method):
 

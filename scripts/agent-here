@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+#
+# Runs a one-off RemoteLLM agent container from any directory, with the
+# current directory bind-mounted as a subfolder of /workspace/projects
+# (named after the current directory's basename) while keeping every
+# persistent home/state volume attached (agent-home, opencode-home,
+# codex-home, claude-home, hermes-home, pi-home, jcode-home, aide-memory, mise-cache) — so
+# agent config, history, and memory stay unified no matter which project
+# directory you call this from. The container starts cd'd into that
+# subfolder. Doesn't touch the long-running `agent` container started by
+# `make up` / `make shell`.
+#
+# Usage: agent-here [-m|--mount HOST[:TARGET][:ro]]... [--] [COMMAND...]
+
+set -euo pipefail
+
+PROGRAM_NAME="$(basename "$0")"
+
+usage() {
+	cat <<EOF
+Usage: $PROGRAM_NAME [-m|--mount HOST[:TARGET][:ro]]... [--] [COMMAND...]
+
+Starts a one-off, auto-removed RemoteLLM agent container with the current
+directory mounted at /workspace/projects/<basename of current directory>,
+plus all the usual persistent home/state volumes. The container starts
+cd'd into that subfolder. Requires the agent image to already be built
+(see 'make build-agent' in the RemoteLLM repo). Configure a provider
+inside the agent, or explicitly configure an API endpoint in .env.
+
+Repeat -m/--mount to also expose extra host directories alongside the
+current one. TARGET defaults to /workspace/mounts/<basename of HOST> when
+omitted. Append :ro to make that particular mount read-only:
+
+  agent-here -m ~/Datasets                      rw at /workspace/mounts/Datasets
+  agent-here -m ~/Datasets:ro                    ro at /workspace/mounts/Datasets
+  agent-here -m ~/secrets:/workspace/secrets:ro  ro at an explicit target
+  agent-here -m ~/a -m ~/b:ro opencode           multiple mounts + a command
+
+With no COMMAND, attaches an interactive zsh login shell. Any arguments
+after the mount flags are run as a one-off command instead, e.g.:
+
+  agent-here                 interactive shell in the current directory
+  agent-here opencode        run opencode directly
+  agent-here git status      run an arbitrary command
+
+  agent-here -h, --help      show this help
+EOF
+}
+
+# HOST[:TARGET][:ro] -> appends "-v" "host:target[:ro]" to mount_args.
+add_mount() {
+	local entry="$1" host="" target="" flag=""
+
+	if [[ "$entry" == *:*:* ]]; then
+		host="${entry%%:*}"
+		local rest="${entry#*:}"
+		target="${rest%%:*}"
+		flag="${rest#*:}"
+	elif [[ "$entry" == *:* ]]; then
+		host="${entry%%:*}"
+		local rest="${entry#*:}"
+		if [[ "$rest" == "ro" ]]; then
+			flag="ro"
+		else
+			target="$rest"
+		fi
+	else
+		host="$entry"
+	fi
+
+	if [[ -n "$flag" && "$flag" != "ro" ]]; then
+		echo "$PROGRAM_NAME: unknown mount flag '$flag' in '$entry' (only ':ro' is supported)" >&2
+		exit 1
+	fi
+	if [[ ! -d "$host" ]]; then
+		echo "$PROGRAM_NAME: mount source '$host' is not a directory" >&2
+		exit 1
+	fi
+	host="$(cd "$host" && pwd)"
+	[[ -n "$target" ]] || target="/workspace/mounts/$(basename "$host")"
+
+	mount_args+=(-v "$host:$target${flag:+:$flag}")
+}
+
+mount_args=()
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-h | --help)
+		usage
+		exit 0
+		;;
+	-m | --mount)
+		[[ $# -ge 2 ]] || {
+			echo "$PROGRAM_NAME: $1 requires an argument" >&2
+			exit 1
+		}
+		add_mount "$2"
+		shift 2
+		;;
+	--)
+		shift
+		break
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+invoke_dir="$(pwd)"
+project_name="$(basename "$invoke_dir")"
+project_target="/workspace/projects/$project_name"
+
+# Resolves through the /usr/bin symlink to the real script, so this works
+# no matter where the repo lives on disk.
+script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+repo_dir="$(cd "$(dirname "$script_path")/.." && pwd)"
+
+IFS=' ' read -r -a compose_cmd <<<"${COMPOSE:-docker compose}"
+
+cd "$repo_dir"
+
+if [[ $# -eq 0 ]]; then
+	set -- zsh -l
+fi
+
+container_suffix="$(printf '%s' "$project_name" | LC_ALL=C tr -c 'a-zA-Z0-9_.-' '-')"
+container_name="${COMPOSE_PROJECT_NAME:-remotellm}-agent-here-${container_suffix}-$$"
+
+run_args=(run --rm --no-deps)
+[[ -t 0 && -t 1 ]] || run_args+=(-T)
+
+# Unique name per invocation — prevents collision with the long-running `agent`
+# container (which has a fixed container_name in compose.yml) and enables
+# concurrent agent-here sessions from different directories.
+run_args+=(--name "$container_name")
+
+exec "${compose_cmd[@]}" "${run_args[@]}" \
+	-v "$invoke_dir:$project_target" \
+	"${mount_args[@]}" \
+	-w "$project_target" \
+	agent "$@"

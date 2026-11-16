@@ -1,5 +1,4 @@
 {
-  "model": "litellm/ollama-default",
   "customApiKeyResponses": {},
   "permissions": {
     "allow": [

@@ -43,15 +43,15 @@ docker compose --profile ide up -d code-server
 
 ### Continue Extension
 
-The AI assistant extension connects to LiteLLM. On first `make init`, the Continue config is seeded from `config/continue/config.yaml` to:
+The AI assistant extension uses a provider you explicitly configure. On first `make init`, the Continue config is seeded from `config/continue/config.yaml` to:
 
 ```text
 .local/volumes/vscode-config/continue/config.yaml
 ```
 
-The seeded config uses the `ollama-default` model alias from LiteLLM for chat, edit, apply, and autocomplete.
+The seeded config has an empty model list; choose a provider before using chat, editing, or autocomplete.
 
-If you change `OPENAI_API_KEY` or `LITELLM_MASTER_KEY` after setup, update the Continue secret file:
+If you configure Continue with an API key and change that key after setup, update the Continue secret file:
 
 ```text
 .local/volumes/vscode-config/continue/.env

@@ -186,6 +186,23 @@ make backup
 
 Backups are written under `.local/backups/`.
 
+## Optional LiteLLM startup
+
+```sh
+make build-onlineagents
+make up-onlineagents
+make down-onlineagents
+```
+
+Agent commands do not start the gateway. Configure a provider/model explicitly;
+see [LiteLLM](LITELLM.md). `make up-full` explicitly enables all profiles, including LiteLLM.
+
+## Pi, jcode, and project launchers
+
+After enabling and building the selected CLI, use `make pi`, `make jcode`,
+`agent-here run-pi-agent`, or `agent-here run-jcode-agent`. See their
+[guides](guides/README.md) for configuration and persistent state.
+
 ## LiteLLM Key Management
 
 List all virtual keys:

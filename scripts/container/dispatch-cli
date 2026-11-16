@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# dispatch-cli <codex|claude-code|opencode> <task_id> <workspace_dir> <prompt>
+# dispatch-cli <codex|claude-code|pi|jcode|opencode> <task_id> <workspace_dir> <prompt>
 #
 # Thin, testable wrapper that Hermes's terminal tool calls to delegate a kanban task to
-# the standalone Codex CLI, Claude Code binary, or OpenCode CLI. See the kanban-dispatch skill
+# the standalone Codex CLI, Claude Code binary, OpenCode CLI, Pi, or jcode. See the kanban-dispatch skill
 # (config/agent/hermes-skills/devops/kanban-dispatch/SKILL.md) for the calling convention
 # and how to interpret the result.
 #
@@ -23,13 +23,15 @@
 #   DISPATCH_OPENCODE_SKIP_PERMISSIONS
 #                                  default 1 for unattended dispatch. Set 0 to require
 #                                  OpenCode's normal permission flow.
+#   DISPATCH_PI_PROVIDER / DISPATCH_PI_MODEL       optional Pi selection.
+#   DISPATCH_JCODE_PROVIDER / DISPATCH_JCODE_MODEL optional jcode selection.
 set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: dispatch-cli <codex|claude-code|opencode> <task_id> <workspace_dir> <prompt>
+Usage: dispatch-cli <codex|claude-code|pi|jcode|opencode> <task_id> <workspace_dir> <prompt>
 
-  backend        "codex", "claude-code", or "opencode"
+  backend        "codex", "claude-code", "opencode", "pi", or "jcode"
   task_id        kanban task id (used to name the log files)
   workspace_dir  directory to run the backend in (created if missing)
   prompt         the task prompt / acceptance criteria to hand to the backend
@@ -47,9 +49,9 @@ workspace_dir=$3
 prompt=$4
 
 case "$backend" in
-  codex|claude-code|opencode) ;;
+  codex|claude-code|pi|jcode|opencode) ;;
   *)
-    echo "dispatch-cli: unknown backend '$backend' (expected 'codex', 'claude-code', or 'opencode')" >&2
+    echo "dispatch-cli: unknown backend '$backend' (expected 'codex', 'claude-code', 'opencode', 'pi', or 'jcode')" >&2
     usage
     exit 2
     ;;
@@ -152,6 +154,61 @@ case "$backend" in
 
     set +e
     opencode "${opencode_args[@]}" >"$log" 2>"$err"
+    code=$?
+    set -e
+    echo "EXIT:${code}"
+    exit "$code"
+    ;;
+  pi)
+    if ! command -v pi >/dev/null 2>&1; then
+      echo "dispatch-cli: Pi is not installed in this image (INSTALL_PI_AGENT=1 required)" >&2
+      echo "EXIT:127"
+      exit 127
+    fi
+
+    # Pi has no approval prompts, so print mode never blocks on permissions.
+    log="${log_base}.json"
+    err="${log_base}.err"
+    pi_args=(--mode json)
+
+    if [[ -n "${DISPATCH_PI_PROVIDER:-}" ]]; then
+      pi_args+=(--provider "$DISPATCH_PI_PROVIDER")
+    fi
+    if [[ -n "${DISPATCH_PI_MODEL:-}" ]]; then
+      pi_args+=(--model "$DISPATCH_PI_MODEL")
+    fi
+    pi_args+=(-p "$prompt")
+
+    set +e
+    pi "${pi_args[@]}" >"$log" 2>"$err"
+    code=$?
+    set -e
+    echo "EXIT:${code}"
+    exit "$code"
+    ;;
+
+  jcode)
+    if ! command -v jcode >/dev/null 2>&1; then
+      echo "dispatch-cli: jcode is not installed in this image (INSTALL_JCODE=1 required)" >&2
+      echo "EXIT:127"
+      exit 127
+    fi
+
+    log="${log_base}.json"
+    err="${log_base}.err"
+    export JCODE_NO_TELEMETRY=1
+    jcode_args=(--no-update run --json)
+
+    if [[ -n "${DISPATCH_JCODE_PROVIDER:-}" ]]; then
+      jcode_args+=(--provider "$DISPATCH_JCODE_PROVIDER")
+    fi
+    if [[ -n "${DISPATCH_JCODE_MODEL:-}" ]]; then
+      jcode_args+=(--model "$DISPATCH_JCODE_MODEL")
+    fi
+    jcode_args+=("$prompt")
+
+    set +e
+    jcode "${jcode_args[@]}" >"$log" 2>"$err"
     code=$?
     set -e
     echo "EXIT:${code}"

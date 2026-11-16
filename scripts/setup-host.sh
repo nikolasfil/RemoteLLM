@@ -18,6 +18,8 @@ mkdir -p \
   .local/volumes/codex-home \
   .local/volumes/claude-home \
   .local/volumes/hermes-home \
+  .local/volumes/pi-home \
+  .local/volumes/jcode-home \
   .local/volumes/aide-memory \
   .local/volumes/mise-cache \
   .local/volumes/nginx-auth \
@@ -74,13 +76,6 @@ required_vars=(
   COMPOSE_PROJECT_NAME
   NGINX_BIND
   NGINX_PORT
-  OLLAMA_BASE_URL
-  OLLAMA_MODEL
-  OLLAMA_PROXY
-  LOCAL_ENDPOINT
-  OPENAI_BASE_URL
-  LITELLM_MASTER_KEY
-  LITELLM_SALT_KEY
 )
 
 for var in "${required_vars[@]}"; do
@@ -91,11 +86,8 @@ for var in "${required_vars[@]}"; do
 done
 
 placeholder_values=(
-  OPENAI_API_KEY
   CODE_SERVER_PASSWORD
   TTYD_PASSWORD
-  LITELLM_MASTER_KEY
-  LITELLM_SALT_KEY
   HERMES_DASHBOARD_PASSWORD
 )
 
@@ -117,8 +109,23 @@ if [[ "${INSTALL_CLAUDE_CODE:-0}" == "1" && -z "${CLAUDE_CODE_PACKAGE:-}" ]]; th
   exit 1
 fi
 
+if [[ "${INSTALL_PI_AGENT:-0}" == "1" && -z "${PI_AGENT_PACKAGE:-}" ]]; then
+  echo "INSTALL_PI_AGENT=1 requires PI_AGENT_PACKAGE, for example @earendil-works/pi-coding-agent@<version>" >&2
+  exit 1
+fi
+
+if [[ "${INSTALL_JCODE:-0}" == "1" && -z "${JCODE_VERSION:-}" ]]; then
+  echo "INSTALL_JCODE=1 requires JCODE_VERSION, a release tag such as v0.88.0" >&2
+  exit 1
+fi
+
 if [[ "${COPY_WIREGUARD_CONFIG:-0}" == "1" ]]; then
-  src="${WIREGUARD_SOURCE:-/home/figaro/Programms/Wireguard/wireguard.conf}"
+  if [[ -z "${WIREGUARD_SOURCE:-}" ]]; then
+    echo "error: COPY_WIREGUARD_CONFIG=1 requires WIREGUARD_SOURCE to be set in .env" >&2
+    echo "  Example: WIREGUARD_SOURCE=/path/to/your/wireguard.conf" >&2
+    exit 1
+  fi
+  src="${WIREGUARD_SOURCE}"
   dst=".local/volumes/wireguard/wg_confs/wg0.conf"
   if [[ -f "$src" ]]; then
     cp "$src" "$dst"

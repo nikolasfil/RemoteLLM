@@ -46,9 +46,9 @@ Edit `.env` before starting the stack:
 OLLAMA_BASE_URL=http://ollama.example.internal:11434
 OLLAMA_MODEL=qwen3-coder:30b
 OLLAMA_PROXY=socks5h://wireguard:1080
-LOCAL_ENDPOINT=http://litellm:4000/v1
-OPENAI_BASE_URL=http://litellm:4000/v1
-OPENAI_API_KEY=change-me
+LOCAL_ENDPOINT=
+OPENAI_BASE_URL=
+OPENAI_API_KEY=
 CODE_SERVER_PASSWORD=change-me
 TTYD_USER=agent
 TTYD_PASSWORD=change-me
@@ -68,14 +68,14 @@ Manual setup:
 
 ```sh
 mkdir -p .local/volumes/wireguard/wg_confs
-cp /home/figaro/Programms/Wireguard/wireguard.conf .local/volumes/wireguard/wg_confs/wg0.conf
+cp /path/to/wireguard.conf .local/volumes/wireguard/wg_confs/wg0.conf
 chmod 600 .local/volumes/wireguard/wg_confs/wg0.conf
 ```
 
 Automated setup:
 
 ```dotenv
-WIREGUARD_SOURCE=/home/figaro/Programms/Wireguard/wireguard.conf
+WIREGUARD_SOURCE=/path/to/wireguard.conf
 COPY_WIREGUARD_CONFIG=1
 ```
 
@@ -125,7 +125,7 @@ The browser IDE can use Continue when the extension is installed. `make init` se
 .local/volumes/vscode-config/continue/.env
 ```
 
-The seeded Continue config points at LiteLLM with model alias `ollama-default`. Update `.local/volumes/vscode-config/continue/.env` after changing `OPENAI_API_KEY` or `LITELLM_MASTER_KEY`.
+The seeded Continue config has no models. Configure a provider explicitly; its secret file is `.local/volumes/vscode-config/continue/.env`.
 
 ## Dev Environments
 
@@ -228,13 +228,17 @@ http://127.0.0.1:8645/
 
 When `NGINX_BIND=0.0.0.0`, the nginx auth gate uses `HERMES_DASHBOARD_USER` and `HERMES_DASHBOARD_PASSWORD`. Run `make init` after changing those values to regenerate the htpasswd file.
 
-Set `HERMES_OLLAMA_MODEL` to the Ollama model Hermes should use. The model must support ≥64k context (LiteLLM forces `num_ctx=65536` for the `hermes` alias). Run `make restart-litellm` after changing this value.
+Use `hermes model` for native provider setup. Only for optional LiteLLM routing,
+set `HERMES_OLLAMA_MODEL` to the upstream Ollama model. The model must support ≥64k context (LiteLLM forces `num_ctx=65536` for the `hermes` alias). Run `make restart-litellm` after changing this value.
 
-Create a scoped LiteLLM virtual key for Hermes (see [LiteLLM](LITELLM.md#virtual-keys)):
+If you explicitly choose LiteLLM, start `make up-onlineagents` first and create a scoped LiteLLM virtual key for Hermes (see [LiteLLM](LITELLM.md#virtual-keys)):
 
 ```dotenv
 HERMES_VIRTUAL_KEY=sk-...
 ```
+
+Configure Hermes's custom provider with `http://litellm:4000/v1`, the scoped key,
+and the model alias explicitly. The role variable alone does not select routing.
 
 ## Optional Profiles
 
@@ -306,10 +310,18 @@ Use `make logs-langfuse` to follow the Langfuse web and worker logs.
 See [Langfuse](LANGFUSE.md) for what it records, daily use, operations, and
 troubleshooting.
 
+## Optional Pi and jcode
+
+Enable and pin `INSTALL_PI_AGENT` / `PI_AGENT_PACKAGE` or `INSTALL_JCODE` /
+`JCODE_VERSION` in `.env`, then run `make build-agent` and `make pi` / `make jcode`.
+Each agent uses its own provider login and persistent state. See the
+[Pi](guides/pi.md) and [jcode](guides/jcode.md) guides.
+Use [agent-here](guides/agent-here.md) to launch from any project directory.
+
 ## LiteLLM Gateway
 
-LiteLLM is the model gateway. It starts by default because it is the only service
-that proxies to the remote Ollama endpoint. Agents call `http://litellm:4000/v1`
+LiteLLM is an optional model gateway. Start it with `make build-onlineagents`
+and `make up-onlineagents`. Explicitly configured agents call `http://litellm:4000/v1`
 on the internal Docker network.
 
 LiteLLM uses a dedicated PostgreSQL instance (`litellm-postgres`) to persist
@@ -322,7 +334,7 @@ the core stack.
 http://127.0.0.1:8088/api/litellm/v1/
 ```
 
-Use a virtual key (or `LITELLM_MASTER_KEY` before keys are created) as the
+Use a scoped virtual key as the
 bearer token.
 
 ### Admin UI

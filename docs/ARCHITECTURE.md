@@ -1,6 +1,6 @@
 # Architecture
 
-RemoteLLM is a Docker Compose workspace for running coding agents behind a single LiteLLM gateway. Ollama is an optional model source: point it directly at a reachable Ollama instance, or route to one over your own WireGuard VPN. Neither is required — agents work through Anthropic (Claude) or the CPU-only BitNet profile without any Ollama or VPN setup.
+RemoteLLM is a Docker Compose workspace for running coding agents using native providers or an optional LiteLLM gateway. Ollama is an optional model source: point it directly at a reachable Ollama instance, or route to one over your own WireGuard VPN. Neither is required — agents work through Anthropic (Claude) or the CPU-only BitNet profile without any Ollama or VPN setup.
 
 ## Services
 
@@ -13,8 +13,9 @@ RemoteLLM is a Docker Compose workspace for running coding agents behind a singl
 - `claude`: optional one-shot Claude Code profile using the same project mounts.
 - `hermes`: optional one-shot Hermes Agent profile using the same project mounts.
 - `hermes-web`: optional Hermes browser dashboard at port `HERMES_WEB_PORT` (default `8645`).
-- `litellm`: OpenAI-compatible model gateway for routing calls to Ollama and Anthropic. Authenticated with virtual keys.
-- `litellm-postgres`: PostgreSQL instance backing LiteLLM for virtual key persistence, usage logs, and team settings.
+- `pi`, `jcode`: optional CLI profiles with persistent home volumes.
+- `litellm` (optional `onlineagents` profile): OpenAI-compatible model gateway for routing calls to Ollama and Anthropic. Authenticated with virtual keys.
+- `litellm-postgres` (optional `onlineagents` profile): PostgreSQL instance backing LiteLLM for virtual key persistence, usage logs, and team settings.
 - `langfuse-*`: optional observability profile that stores LiteLLM traces, errors,
   and usage metrics.
 - `nginx`: local reverse proxy bound to `127.0.0.1:${NGINX_PORT:-8088}` by default.
@@ -28,7 +29,7 @@ OLLAMA_PROXY=socks5h://wireguard:1080
 NO_PROXY=localhost,127.0.0.1,agent,nginx,code-server,litellm,wireguard
 ```
 
-The `vpn-proxy` service runs in the same network namespace as `wireguard`, and both services stay off until `make up-vpn` or the `vpn` Compose profile is used. The agent and terminal do not set `ALL_PROXY`, `HTTP_PROXY`, or `HTTPS_PROXY`; this keeps npm, Bun, pip, Git, and opencode plugin installs off the VPN. Agents call LiteLLM at `http://litellm:4000/v1`; LiteLLM can use the VPN path when configured for `wireguard:11434` or `OLLAMA_PROXY=socks5h://wireguard:1080`. DNS resolution happens through the SOCKS proxy when `socks5h` is used.
+The `vpn-proxy` service runs in the same network namespace as `wireguard`, and both services stay off until `make up-vpn` or the `vpn` Compose profile is used. The agent and terminal do not set `ALL_PROXY`, `HTTP_PROXY`, or `HTTPS_PROXY`; this keeps npm, Bun, pip, Git, and opencode plugin installs off the VPN. Agents explicitly configured for gateway routing call LiteLLM at `http://litellm:4000/v1`; LiteLLM can use the VPN path when configured for `wireguard:11434` or `OLLAMA_PROXY=socks5h://wireguard:1080`. DNS resolution happens through the SOCKS proxy when `socks5h` is used.
 
 ## Volumes
 
@@ -46,6 +47,8 @@ ignored by git.
 - `.local/volumes/aide-memory`: local agent memory.
 - `.local/volumes/vscode-config/continue`: Continue config and local secrets for code-server.
 - `.local/volumes/wireguard`: WireGuard runtime config and state.
+- `.local/volumes/pi-home`: Pi configuration and login state.
+- `.local/volumes/jcode-home`: jcode configuration and login state.
 - `.local/volumes/litellm`: LiteLLM runtime state.
 - `.local/volumes/litellm-postgres`: LiteLLM PostgreSQL data (virtual keys, usage logs).
 - `.local/volumes/langfuse`: optional Langfuse Postgres, ClickHouse, MinIO, and
@@ -80,11 +83,11 @@ The entrypoint creates `/workspace/.aide/memory`, `/workspace/.aide/state`, and 
 
 ## Continue
 
-The browser IDE mounts `.local/volumes/vscode-config/continue` as `/home/coder/.continue`. Host setup seeds `config.yaml` from `config/continue/config.yaml` and creates a local `.env` file with `OPENAI_API_KEY` for Continue secret resolution. The seeded config uses Continue's `openai` provider against LiteLLM at `http://litellm:4000/v1` and the `ollama-default` model alias.
+The browser IDE mounts `.local/volumes/vscode-config/continue` as `/home/coder/.continue`. Host setup seeds `config.yaml` from `config/continue/config.yaml` and creates a local `.env` file with `OPENAI_API_KEY` for Continue secret resolution. The seeded config has no models. Configure a provider in Continue before use.
 
 ## Optional Agents
 
-The `codex`, `claude`, `hermes`, and `hermes-web` Compose profiles are disabled by default. They run wrapper commands from the agent image and share the normal workspace, memory, and tool volumes. To keep builds reproducible, the image only installs these CLIs when the corresponding variables are set in `.env`.
+The `codex`, `claude`, `pi`, `jcode`, `hermes`, and `hermes-web` Compose profiles are disabled by default. They run wrapper commands from the agent image and share the normal workspace, memory, and tool volumes. To keep builds reproducible, the image only installs these CLIs when the corresponding variables are set in `.env`.
 
 Set `INSTALL_CODEX_CLI=1` with `CODEX_CLI_PACKAGE=@openai/codex@<version>` to include Codex CLI. Set `INSTALL_CLAUDE_CODE=1` with `CLAUDE_CODE_PACKAGE=@anthropic-ai/claude-code@<version>` to include Claude Code. Rebuild after changing either setting.
 
@@ -140,7 +143,7 @@ processing a request; "peak" is under active agent workload.
 
 | Profile | Services | Min RAM | Recommended RAM | Recommended CPU |
 |---|---|---|---|---|
-| Core (`make up`) | agent, litellm, litellm-postgres, nginx | 2 GB | 4 GB | 2 cores |
+| Core (`make up`) | agent, nginx | 2 GB | 4 GB | 2 cores |
 | + VPN (`make up-vpn`) | + wireguard, vpn-proxy | 2 GB | 4 GB | 2 cores |
 | + IDE (`make up-ide`) | + code-server, web-terminal | 3 GB | 8 GB | 4 cores |
 | + Observability | + all langfuse services | 6 GB | 16 GB | 6+ cores |
@@ -159,3 +162,12 @@ requires DinD or host Docker access in this stack. If a use case emerges (e.g.,
 agent-driven container builds), it should be added as an explicit `docker-host` profile
 with a separate security review. Relevant tracking: remote-coding-agent-stack.md open
 decisions.
+
+## Agent image build
+
+The Dockerfile separates OpenCode, Codex, Claude, and Pi npm installs into
+independent stages. Scanner and downloaded-binary stages build separately.
+The base OS and Hermes layers precede tool copies, preserving their cache when
+a CLI version changes. Optional disabled tools leave empty install directories
+so the runtime copies remain valid. The runtime includes Pi/jcode seed files
+and wrappers, with no preselected gateway provider.

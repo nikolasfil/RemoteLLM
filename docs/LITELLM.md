@@ -1,9 +1,47 @@
 # LiteLLM
 
-LiteLLM is the model gateway for RemoteLLM. Every agent, IDE extension, and
-tool in the stack calls `http://litellm:4000/v1` instead of upstream providers
-directly. LiteLLM handles routing, authentication, and (optionally) spend
-tracking.
+LiteLLM is an optional model gateway. Native provider login/configuration is
+the default. `make up`, agent CLI targets, and `agent-here` do not start LiteLLM.
+
+## Enable the gateway
+
+Set the optional gateway credentials and upstream model settings in `.env`, then:
+
+```sh
+make build-onlineagents
+make up-onlineagents
+```
+
+This starts LiteLLM and its PostgreSQL service through the `onlineagents` profile.
+It does not switch any agent's provider. For an OpenAI-compatible client, explicitly
+configure `http://litellm:4000/v1`, a scoped virtual key, and a model alias.
+`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `LOCAL_ENDPOINT` are empty by default;
+no master key is substituted into an agent.
+
+For OpenCode, add an optional provider to its persisted `opencode.jsonc`:
+
+```json
+{
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Optional LiteLLM",
+      "options": {
+        "baseURL": "http://litellm:4000/v1",
+        "apiKey": "{env:OPENAI_API_KEY}"
+      },
+      "models": { "ollama-default": { "name": "Ollama Default" } }
+    }
+  }
+}
+```
+
+Merge this into the existing config, preserving other settings. Set
+`OPENAI_API_KEY` to the scoped key and select `litellm/ollama-default` explicitly.
+Existing persisted configurations are not overwritten by a rebuild. Review and
+remove old gateway/model selections manually when switching to native providers.
+
+Stop the optional gateway with `make down-onlineagents`.
 
 ## Architecture
 
@@ -19,9 +57,9 @@ LiteLLM proxy  http://litellm:4000/v1
 ```
 
 Agents authenticate with **virtual keys** — scoped tokens tied to a specific
-model allow-list and optional rate/budget limits. The LiteLLM master key and
-real upstream credentials (Anthropic API key, Ollama URL) never enter agent
-containers.
+model allow-list and optional rate/budget limits. The master key is not injected into agents. Native direct-provider mode can
+pass a real upstream API key to an agent; gateway-only setups should configure
+upstream credentials separately from agent credentials.
 
 ## Database
 
@@ -61,8 +99,8 @@ need to recreate them.
 
 ### Why virtual keys
 
-The default fallback — using `LITELLM_MASTER_KEY` as the agent API key — gives
-every agent full admin access to LiteLLM. A compromised container can create
+Using `LITELLM_MASTER_KEY` as an agent API key would give that agent full
+admin access to LiteLLM. There is no automatic master-key fallback. A compromised container can create
 new keys, view all usage, and modify settings.
 
 Virtual keys are scoped: model-locked, rate-limited, and instantly revocable.
@@ -72,7 +110,7 @@ configured rate, and you can revoke it without touching any other service.
 ### Creating keys
 
 The `make litellm-keys` target generates one key per role and prints the values
-to copy into `.env`:
+to save securely. Role variables alone do not configure an agent:
 
 ```sh
 make litellm-keys
@@ -111,11 +149,9 @@ HERMES_VIRTUAL_KEY=sk-...
 CLAUDE_VIRTUAL_KEY=sk-...
 ```
 
-Then restart the affected containers:
-
-```sh
-docker compose up -d agent hermes claude
-```
+Explicitly configure the selected key as `OPENAI_API_KEY` or through the chosen
+agent's provider settings, then recreate that service. Role variables are optional
+storage names, not automatic routing controls.
 
 ### Managing keys
 
@@ -160,7 +196,7 @@ directly (same LAN) or over your own WireGuard server via `make up-vpn` (see
 ## Anthropic (Claude) Routing
 
 When `ANTHROPIC_API_KEY` is set in `.env`, LiteLLM exposes it as `claude-default`.
-The real key lives only in the `litellm` container. Agents use a scoped virtual
+This value supplies the gateway upstream key and can also supply agents in direct-provider mode. Agents use a scoped virtual
 key (`CLAUDE_VIRTUAL_KEY`) pointed at `http://litellm:4000/v1`.
 
 For the `claude` profile (Claude Code CLI), set:
@@ -168,10 +204,14 @@ For the `claude` profile (Claude Code CLI), set:
 ```dotenv
 # Route Claude Code through LiteLLM instead of Anthropic directly
 ANTHROPIC_BASE_URL=http://litellm:4000
-ANTHROPIC_API_KEY=   # leave empty; the virtual key is used via OPENAI_API_KEY
+ANTHROPIC_API_KEY=<scoped-gateway-key-for-this-agent>
 ```
 
-If you prefer Claude Code to call Anthropic directly, set `ANTHROPIC_API_KEY`
+Keep the real upstream key in the gateway environment or credential store;
+do not replace its upstream key with the agent virtual key. The shared `.env`
+uses one `ANTHROPIC_API_KEY`, so use a service-specific override for gateway routing.
+
+For Claude Code to call Anthropic directly, set `ANTHROPIC_API_KEY`
 to your real key and leave `ANTHROPIC_BASE_URL` empty. In that case the real
 key is visible inside the `claude` container.
 

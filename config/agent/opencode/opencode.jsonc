@@ -1,25 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.schema.json",
   "share": "disabled",
-  "provider": {
-    "litellm": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteLLM (RemoteLLM)",
-      "options": {
-        "baseURL": "http://litellm:4000/v1",
-        "apiKey": "{env:OPENAI_API_KEY}"
-      },
-      "models": {
-        "ollama-default": {
-          "name": "Ollama Default"
-        }
-      }
-    }
-  },
-  "model": "litellm/ollama-default",
-  "disabled_providers": ["openai", "anthropic", "google", "bedrock", "azure"],
-  "instructions": ["/etc/remotellm/AGENTS.md"],
-  "plugin": ["opencode-goal-plugin"],
+  "instructions": [
+    "/etc/remotellm/AGENTS.md"
+  ],
+  "plugin": [
+    "opencode-goal-plugin"
+  ],
   "command": {
     "goal": {
       "description": "Set a session-scoped goal and auto-continue until complete.",

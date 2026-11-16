@@ -91,8 +91,8 @@ misbehaving agent can exfiltrate data and make arbitrary external requests.
 
 ### LiteLLM Key
 
-The agent authenticates to LiteLLM with `OPENAI_API_KEY`, which defaults to
-`AGENT_VIRTUAL_KEY` → `LITELLM_MASTER_KEY`. Using a scoped virtual key
+When explicitly configured for LiteLLM, the agent authenticates with
+`OPENAI_API_KEY`. No key is assigned by default and there is no master-key fallback. Using a scoped virtual key
 (`make litellm-keys`) limits the agent to specific models and rate limits. Using the
 master key gives the agent full admin access to LiteLLM, including the ability to
 generate new keys, view spend, and modify configuration.
@@ -131,7 +131,7 @@ are exposed. **Review `.local/volumes/agent-home/` before sharing any backup.**
 
 ### Agent calls the LiteLLM API as admin
 
-If `AGENT_VIRTUAL_KEY` is not set and `LITELLM_MASTER_KEY` is used as fallback, the
+If a user explicitly configures `LITELLM_MASTER_KEY` as the agent key, the
 agent can enumerate virtual keys, generate new ones, delete models, and view full spend
 history through the LiteLLM admin API. This is the single most important credential
 control.
@@ -165,8 +165,8 @@ undone by restarting a container.
 
 ### 1. Never use `LITELLM_MASTER_KEY` as the agent's API key
 
-Set `AGENT_VIRTUAL_KEY`, `HERMES_VIRTUAL_KEY`, and
-`CLAUDE_VIRTUAL_KEY` via `make litellm-keys`. The master key must only be held by the
+For optional LiteLLM routing, create scoped keys via `make litellm-keys` and
+configure the selected key in each agent explicitly. The master key must only be held by the
 operator (in `.env`) and the LiteLLM service itself.
 
 ### 2. Do not mount `/var/run/docker.sock`

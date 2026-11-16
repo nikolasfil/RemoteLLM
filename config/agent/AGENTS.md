@@ -8,7 +8,7 @@ You are running inside the RemoteLLM Docker workspace.
 - Use `safe-pip-install` instead of direct `pip install` when adding Python packages.
 - Use `safe-package-check` before adding unfamiliar dependencies from npm, PyPI, GitHub, Go, Cargo, Maven, or RubyGems.
 - Do not write secrets into project files. Use environment variables or files under the mounted `volumes/` directories.
-- Remote model traffic should use `LOCAL_ENDPOINT` or `OPENAI_BASE_URL`; only LiteLLM should use the WireGuard proxy to reach Ollama.
+- Use the provider configured by the user. LiteLLM is optional; only an explicitly configured gateway should use the WireGuard proxy to reach Ollama.
 - Keep durable working memory under `/workspace/.aide` when an agent or MCP integration supports it.
 - Put reusable local skills under `$HOME/.codex/skills`.
 - Prefer project-local tool declarations over global installs.

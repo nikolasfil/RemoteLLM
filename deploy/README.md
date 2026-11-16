@@ -15,4 +15,4 @@ The root `compose.yml` is the full stack. See `deploy/full/README.md` for detail
 
 ## Mini stack
 
-The `deploy/mini/` variant strips the stack down to the three services that fit on the Celeron: nginx, LiteLLM, and the agent. LLM inference is handled by an external Hermes API rather than a local model. See `deploy/mini/README.md` for setup instructions.
+The `deploy/mini/` variant strips the stack down to the agent and nginx services, plus an optional LiteLLM gateway under the `onlineagents` profile. Configure a direct provider or explicitly enable the gateway for an external API. See `deploy/mini/README.md` for setup instructions.

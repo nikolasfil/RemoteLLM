@@ -36,3 +36,7 @@ One guide per application and service in the RemoteLLM stack. Each guide covers 
 | [BitNet](bitnet.md) | CPU-only local inference (GPU-free fallback) | `cpu-llm` |
 | [Playwright](playwright.md) | Browser automation via MCP | `playwright` |
 | [Nix Agent](nix-agent.md) | Devbox / Nix reproducible dev environments | `nix` |
+
+- [agent-here](agent-here.md): launch in any host project directory.
+- [Pi](pi.md): optional Pi coding agent.
+- [jcode](jcode.md): optional jcode CLI.

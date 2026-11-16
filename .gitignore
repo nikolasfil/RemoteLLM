@@ -6,3 +6,8 @@ graphify-out/cache
 models/
 !models/**/.gitkeep
 config/nginx/html/docs/
+.project-state.json
+
+# Local credentials; publish templates only.
+.env.*
+!.env.example

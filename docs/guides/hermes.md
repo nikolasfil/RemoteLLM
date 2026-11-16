@@ -64,9 +64,10 @@ Then rebuild:
 make build
 ```
 
-### LiteLLM Virtual Key for Hermes
+### Optional LiteLLM Virtual Key for Hermes
 
-Create a scoped key restricted to the `hermes` model alias (which forces 64k context):
+Use `hermes model` to configure a native provider by default. If you explicitly
+choose gateway routing, start `make up-onlineagents` first. Create a scoped key restricted to the `hermes` model alias (which forces 64k context):
 
 ```sh
 curl -s -X POST http://127.0.0.1:8088/api/litellm/key/generate \
@@ -82,10 +83,14 @@ Set in `.env`:
 HERMES_VIRTUAL_KEY=sk-...
 ```
 
+This stores the optional key only. Configure Hermes with the custom provider,
+`http://litellm:4000/v1`, this scoped key, and the chosen model explicitly.
+The role variable alone does not change Hermes routing.
+
 ### Model Configuration
 
 ```dotenv
-HERMES_OLLAMA_MODEL=hermes3:8b    # model Hermes uses; must support ≥64k context
+HERMES_OLLAMA_MODEL=hermes3:8b    # optional gateway alias only; supports ≥64k context
 ```
 
 Apply after changing:
